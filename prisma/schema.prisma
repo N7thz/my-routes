@@ -1,0 +1,139 @@
+generator client {
+  provider = "prisma-client"
+  output   = "./generated"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// --- Empresas ---
+
+enum CompanyStatus {
+  PENDENTE
+  EM_ANDAMENTO
+  CONCLUIDO
+  REVISAO
+
+  @@map("company_status")
+}
+
+model Company {
+  id           String         @id @default(cuid())
+  name         String
+  cnpj         String?
+  address      String?
+  lat          Float?
+  lng          Float?
+  date         DateTime?
+  status       CompanyStatus?
+  observations String?
+  notionId     String?        @unique
+  stops        Stop[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@map("company")
+}
+
+// --- Rotas ---
+
+enum RouteStatus {
+  RASCUNHO
+  EM_ANDAMENTO
+  CONCLUIDA
+
+  @@map("route_status")
+}
+
+model Route {
+  id        String      @id @default(cuid())
+  userId    String      @map("user_id")
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  date      DateTime?   @db.Date
+  status    RouteStatus @default(RASCUNHO)
+  stops     Stop[]
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+
+  @@map("route")
+}
+
+model Stop {
+  id        String    @id @default(cuid())
+  routeId   String    @map("route_id")
+  route     Route     @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  companyId String?   @map("company_id")
+  company   Company?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  label     String?
+  address   String
+  lat       Float?
+  lng       Float?
+  order     Int       @default(0)
+  visitedAt DateTime? @map("visited_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@map("stop")
+}
+
+// --- Better Auth models ---
+
+model User {
+  id            String    @id
+  name          String
+  email         String    @unique
+  emailVerified Boolean
+  image         String?
+  createdAt     DateTime
+  updatedAt     DateTime
+  sessions      Session[]
+  accounts      Account[]
+  routes        Route[]
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime
+  updatedAt DateTime
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?   @db.Text
+  refreshToken          String?   @db.Text
+  idToken               String?   @db.Text
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime
+  updatedAt             DateTime
+
+  @@map("account")
+}
+
+model Verification {
+  id         String    @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime?
+  updatedAt  DateTime?
+
+  @@map("verification")
+}
