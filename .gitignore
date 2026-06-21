@@ -39,6 +39,9 @@ client_secret*.json
 # vercel
 .vercel
 
+# MCP config (may contain API tokens)
+.mcp.json
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
