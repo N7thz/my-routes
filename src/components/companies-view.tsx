@@ -1,7 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import {
+  useQueryState,
+  parseAsString,
+  parseAsInteger,
+  parseAsStringLiteral,
+  parseAsNumberLiteral,
+  parseAsArrayOf,
+  debounce,
+} from "nuqs";
 import { cn } from "@/lib/utils";
 import { useCompanies, useUpdateCompany, useDeleteCompany, useCreateCompany } from "@/hooks/use-companies";
 import { useCnpjLookup, formatCnpj } from "@/hooks/use-cnpj";
@@ -96,10 +104,16 @@ type EnrichedCompany = CompanyRecord & {
 
 type SortKey = "name" | "open" | "urgent" | "overdue" | "closed" | "status" | "nextEvent";
 type SortDir = "asc" | "desc";
-type ViewMode = "cards" | "table";
 
 const PER_PAGE_OPTIONS = [12, 24, 48, 96] as const;
 type PerPage = (typeof PER_PAGE_OPTIONS)[number];
+
+// ─── literais para os parsers de URL (nuqs) ────────────────────────────────────
+
+const SORT_KEYS = ["name", "open", "urgent", "overdue", "closed", "status", "nextEvent"] as const;
+const SORT_DIRS = ["asc", "desc"] as const;
+const VIEW_MODES = ["cards", "table"] as const;
+const STATUS_KEYS = ["PENDENTE", "EM_ANDAMENTO", "CONCLUIDO", "REVISAO"] as const;
 
 // ─── status config ────────────────────────────────────────────────────────────
 
@@ -140,6 +154,45 @@ function formatDate(date: Date | string | null): string {
   if (!date) return "—";
   const d = typeof date === "string" ? new Date(date) : date;
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function todayIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// Combina data (YYYY-MM-DD) + hora (HH:mm) num instante ISO, tratando o horário
+// informado como "relógio de parede" (gravado e lido em UTC), evitando
+// deslocamento por fuso entre cliente e servidor.
+function combineDateTime(date: string, time: string): string | null {
+  if (!date) return null;
+  return `${date}T${time || "00:00"}:00.000Z`;
+}
+
+// Extrai a hora (HH:mm) de uma data salva; vazio quando é meia-noite (sem hora).
+function timeFromDate(date: Date | string | null): string {
+  if (!date) return "";
+  const d = new Date(date);
+  return d.getUTCHours() === 0 && d.getUTCMinutes() === 0 ? "" : d.toISOString().slice(11, 16);
+}
+
+// Exibe data e, quando houver hora definida, a hora da visita.
+function formatDateTime(date: Date | string | null): string {
+  if (!date) return "—";
+  const d = new Date(date);
+  const dateStr = d.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+  if (d.getUTCHours() === 0 && d.getUTCMinutes() === 0) return dateStr;
+  const timeStr = d.toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "UTC",
+  });
+  return `${dateStr} às ${timeStr}`;
 }
 
 function formatEstimate(seconds?: number): string | null {
@@ -248,11 +301,12 @@ function CreateCompanyDialog({ open, onClose }: { open: boolean; onClose: () => 
     address: string;
     status: CompanyStatus | "";
     date: string;
+    time: string;
     observations: string;
-  }>({ name: "", cnpj: "", address: "", status: "", date: "", observations: "" });
+  }>(() => ({ name: "", cnpj: "", address: "", status: "PENDENTE", date: todayIso(), time: "", observations: "" }));
 
   function resetForm() {
-    setForm({ name: "", cnpj: "", address: "", status: "", date: "", observations: "" });
+    setForm({ name: "", cnpj: "", address: "", status: "PENDENTE", date: todayIso(), time: "", observations: "" });
     cnpjLookup.reset();
   }
 
@@ -274,7 +328,7 @@ function CreateCompanyDialog({ open, onClose }: { open: boolean; onClose: () => 
       cnpj: form.cnpj || null,
       address: form.address || null,
       status: (form.status as CompanyStatus) || null,
-      date: form.date || null,
+      date: combineDateTime(form.date, form.time),
       observations: form.observations || null,
     });
     resetForm();
@@ -371,6 +425,16 @@ function CreateCompanyDialog({ open, onClose }: { open: boolean; onClose: () => 
             </div>
           </div>
           <div className="flex flex-col gap-1.5">
+            <Label htmlFor="cc-time">Hora da visita</Label>
+            <Input
+              id="cc-time"
+              type="time"
+              value={form.time}
+              onChange={(e) => setForm((f) => ({ ...f, time: e.target.value }))}
+              className="w-40"
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
             <Label htmlFor="cc-obs">Observações</Label>
             <Textarea
               id="cc-obs"
@@ -410,8 +474,9 @@ function EditCompanyDialog({
     address: string;
     status: CompanyStatus | "";
     date: string;
+    time: string;
     observations: string;
-  }>({ name: "", cnpj: "", address: "", status: "", date: "", observations: "" });
+  }>({ name: "", cnpj: "", address: "", status: "", date: "", time: "", observations: "" });
 
   useMemo(() => {
     if (company) {
@@ -422,6 +487,7 @@ function EditCompanyDialog({
         address: company.address ?? "",
         status: company.status ?? "",
         date: company.date ? new Date(company.date).toISOString().slice(0, 10) : "",
+        time: timeFromDate(company.date),
         observations: company.observations ?? "",
       });
     }
@@ -449,7 +515,7 @@ function EditCompanyDialog({
         cnpj: form.cnpj || null,
         address: form.address || null,
         status: (form.status as CompanyStatus) || null,
-        date: form.date || null,
+        date: combineDateTime(form.date, form.time),
         observations: form.observations || null,
       },
     });
@@ -539,6 +605,16 @@ function EditCompanyDialog({
                 onChange={(v) => setForm((f) => ({ ...f, date: v }))}
               />
             </div>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="ec-time">Hora da visita</Label>
+            <Input
+              id="ec-time"
+              type="time"
+              value={form.time}
+              onChange={(e) => setForm((f) => ({ ...f, time: e.target.value }))}
+              className="w-40"
+            />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="ec-obs">Observações</Label>
@@ -708,7 +784,7 @@ function CompanySheet({
             <div className="flex items-center gap-2 text-sm">
               <CalendarIcon className="size-3.5 text-muted-foreground shrink-0" />
               <span className="text-muted-foreground">Data:</span>
-              <span>{formatDate(company.date)}</span>
+              <span>{formatDateTime(company.date)}</span>
             </div>
           )}
           {company.observations && (
@@ -1151,13 +1227,6 @@ function CompanyCard({
   onDelete: (c: EnrichedCompany) => void;
   onAddToRoute: (c: EnrichedCompany) => void;
 }) {
-  const urgencyColor =
-    company.urgentCount > 0
-      ? "text-red-500"
-      : company.overdueCount > 0
-      ? "text-orange-500"
-      : "text-emerald-500";
-
   return (
     <button
       onClick={onClick}
@@ -1190,31 +1259,6 @@ function CompanyCard({
         </div>
       )}
 
-      <div className="flex items-center gap-4">
-        <div className="flex flex-col items-center">
-          <span className={`text-2xl font-bold tabular-nums ${urgencyColor}`}>
-            {company.openCount}
-          </span>
-          <span className="text-xs text-muted-foreground">abertas</span>
-        </div>
-        {company.urgentCount > 0 && (
-          <div className="flex flex-col items-center">
-            <span className="text-2xl font-bold tabular-nums text-red-500">{company.urgentCount}</span>
-            <span className="text-xs text-muted-foreground">urgentes</span>
-          </div>
-        )}
-        {company.overdueCount > 0 && (
-          <div className="flex flex-col items-center">
-            <span className="text-2xl font-bold tabular-nums text-orange-500">{company.overdueCount}</span>
-            <span className="text-xs text-muted-foreground">atrasadas</span>
-          </div>
-        )}
-        <div className="flex flex-col items-center">
-          <span className="text-2xl font-bold tabular-nums text-muted-foreground">{company.closedCount}</span>
-          <span className="text-xs text-muted-foreground">encerradas</span>
-        </div>
-      </div>
-
       {company.projectNames.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {company.projectNames.slice(0, 3).map((p) => (
@@ -1223,20 +1267,6 @@ function CompanyCard({
           {company.projectNames.length > 3 && (
             <Badge variant="outline" className="text-xs font-normal">+{company.projectNames.length - 3}</Badge>
           )}
-        </div>
-      )}
-
-      {company.nextEvent ? (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground border-t pt-2 mt-auto">
-          <CalendarIcon className="size-3 shrink-0" />
-          <span className="truncate">{company.nextEvent.summary}</span>
-          <span className="shrink-0 ml-auto">
-            {formatShort(company.nextEvent.start.dateTime ?? company.nextEvent.start.date ?? "")}
-          </span>
-        </div>
-      ) : (
-        <div className="text-xs text-muted-foreground border-t pt-2 mt-auto">
-          Sem eventos agendados
         </div>
       )}
     </button>
@@ -1383,30 +1413,36 @@ function CompanyTable({
 // ─── main view ────────────────────────────────────────────────────────────────
 
 export function CompaniesView() {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const pathname = usePathname();
-
-  const page = Math.max(1, parseInt(searchParams.get("page") ?? "1") || 1);
-  const perPage = ((): PerPage => {
-    const v = parseInt(searchParams.get("perPage") ?? "12") as PerPage;
-    return (PER_PAGE_OPTIONS as readonly number[]).includes(v) ? v : 12;
-  })();
-
-  function updateParams(updates: Record<string, string | null>) {
-    const params = new URLSearchParams(searchParams.toString());
-    for (const [key, value] of Object.entries(updates)) {
-      if (value === null) params.delete(key);
-      else params.set(key, value);
-    }
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-  }
-
-  const [viewMode, setViewMode] = useState<ViewMode>("cards");
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<Set<CompanyStatus>>(new Set());
-  const [sortKey, setSortKey] = useState<SortKey>("name");
-  const [sortDir, setSortDir] = useState<SortDir>("asc");
+  // Todos os filtros vivem na URL (nuqs). O estado retornado atualiza na hora;
+  // só a escrita na URL da busca é adiada via debounce para não poluir o histórico.
+  const [viewMode, setViewMode] = useQueryState(
+    "view",
+    parseAsStringLiteral(VIEW_MODES).withDefault("cards")
+  );
+  const [search, setSearch] = useQueryState(
+    "q",
+    parseAsString.withDefault("").withOptions({
+      limitUrlUpdates: debounce(300),
+      clearOnDefault: true,
+    })
+  );
+  const [statusFilter, setStatusFilter] = useQueryState(
+    "status",
+    parseAsArrayOf(parseAsStringLiteral(STATUS_KEYS)).withDefault([])
+  );
+  const [sortKey, setSortKey] = useQueryState(
+    "sort",
+    parseAsStringLiteral(SORT_KEYS).withDefault("name")
+  );
+  const [sortDir, setSortDir] = useQueryState(
+    "dir",
+    parseAsStringLiteral(SORT_DIRS).withDefault("asc")
+  );
+  const [page, setPage] = useQueryState("page", parseAsInteger.withDefault(1));
+  const [perPage, setPerPage] = useQueryState(
+    "perPage",
+    parseAsNumberLiteral(PER_PAGE_OPTIONS).withDefault(12)
+  );
   const [creatingCompany, setCreatingCompany] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState<EnrichedCompany | null>(null);
   const [editingCompany, setEditingCompany] = useState<EnrichedCompany | null>(null);
@@ -1437,12 +1473,13 @@ export function CompaniesView() {
 
   function toggleStatusFilter(key: CompanyStatus) {
     setStatusFilter((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
+      const arr = prev ?? [];
+      const next = arr.includes(key)
+        ? arr.filter((k) => k !== key)
+        : [...arr, key];
+      return next.length > 0 ? next : null;
     });
-    updateParams({ page: "1" });
+    setPage(1);
   }
 
   const filtered = useMemo(() => {
@@ -1455,14 +1492,14 @@ export function CompaniesView() {
             c.projectNames.some((p) => p.toLowerCase().includes(q))
         )
       : enriched;
-    if (statusFilter.size > 0) {
-      list = list.filter((c) => c.status !== null && statusFilter.has(c.status));
+    if (statusFilter.length > 0) {
+      list = list.filter((c) => c.status !== null && statusFilter.includes(c.status));
     }
     return sortCompanies(list, sortKey, sortDir);
   }, [enriched, search, statusFilter, sortKey, sortDir]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
-  const safePage = Math.min(page, totalPages);
+  const safePage = Math.min(Math.max(1, page), totalPages);
   const paginated = filtered.slice((safePage - 1) * perPage, safePage * perPage);
 
   function handleSort(key: SortKey) {
@@ -1529,7 +1566,7 @@ export function CompaniesView() {
             <Input
               placeholder="Buscar empresa, CNPJ ou projeto…"
               value={search}
-              onChange={(e) => { setSearch(e.target.value); updateParams({ page: "1" }); }}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               className="pl-8"
             />
           </div>
@@ -1543,7 +1580,7 @@ export function CompaniesView() {
             </Button>
             <Select
               value={String(perPage)}
-              onValueChange={(v) => updateParams({ perPage: v, page: "1" })}
+              onValueChange={(v) => { setPerPage(Number(v) as PerPage); setPage(1); }}
             >
               <SelectTrigger className="h-8 w-24 text-xs">
                 <SelectValue />
@@ -1580,7 +1617,7 @@ export function CompaniesView() {
         {/* filtros de status */}
         <div className="flex items-center gap-1.5 flex-wrap">
           {(Object.entries(STATUS_CONFIG) as [CompanyStatus, typeof STATUS_CONFIG[CompanyStatus]][]).map(([key, cfg]) => {
-            const active = statusFilter.has(key);
+            const active = statusFilter.includes(key);
             return (
               <button key={key} onClick={() => toggleStatusFilter(key)}>
                 <Badge
@@ -1592,9 +1629,9 @@ export function CompaniesView() {
               </button>
             );
           })}
-          {statusFilter.size > 0 && (
+          {statusFilter.length > 0 && (
             <button
-              onClick={() => setStatusFilter(new Set())}
+              onClick={() => setStatusFilter(null)}
               className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-1"
             >
               Limpar filtros
@@ -1611,15 +1648,15 @@ export function CompaniesView() {
           <div className="flex flex-col items-center justify-center gap-2 py-16 text-muted-foreground">
             <ClipboardXIcon className="size-8" />
             <p className="text-sm">
-              {search && statusFilter.size > 0
+              {search && statusFilter.length > 0
                 ? `Nenhuma empresa para "${search}" com os filtros selecionados`
                 : search
                 ? `Nenhuma empresa encontrada para "${search}"`
                 : "Nenhuma empresa com os filtros selecionados"}
             </p>
-            {statusFilter.size > 0 && (
+            {statusFilter.length > 0 && (
               <button
-                onClick={() => setStatusFilter(new Set())}
+                onClick={() => setStatusFilter(null)}
                 className="text-xs text-primary hover:underline"
               >
                 Limpar filtros
@@ -1666,7 +1703,7 @@ export function CompaniesView() {
                 size="icon"
                 className="size-8"
                 disabled={safePage <= 1}
-                onClick={() => updateParams({ page: String(safePage - 1) })}
+                onClick={() => setPage(safePage - 1)}
               >
                 <ChevronLeftIcon className="size-4" />
               </Button>
@@ -1678,7 +1715,7 @@ export function CompaniesView() {
                 size="icon"
                 className="size-8"
                 disabled={safePage >= totalPages}
-                onClick={() => updateParams({ page: String(safePage + 1) })}
+                onClick={() => setPage(safePage + 1)}
               >
                 <ChevronRightIcon className="size-4" />
               </Button>
