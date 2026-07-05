@@ -1,15 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import {
   useRoutes,
   useCreateRoute,
+  useGenerateRoute,
   useUpdateRoute,
   useDeleteRoute,
   useAddStop,
   useRemoveStop,
   useMarkStopVisited,
+  useReorderStops,
 } from "@/hooks/use-routes";
 import { useCompanies } from "@/hooks/use-companies";
 import type { RouteRecord, StopRecord } from "@/lib/route-service";
@@ -69,9 +71,12 @@ import {
   MoreHorizontalIcon,
   PencilIcon,
   CalendarIcon,
+  CalendarPlusIcon,
   BuildingIcon,
   ClipboardXIcon,
   NavigationIcon,
+  ChevronUpIcon,
+  ChevronDownIcon,
 } from "lucide-react";
 
 // ─── status config ─────────────────────────────────────────────────────────────
@@ -90,6 +95,18 @@ const STATUS_CONFIG: Record<
 function formatDate(date: Date | string | null): string {
   if (!date) return "—";
   return new Date(date).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function todayIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// chave de dia TZ-safe a partir da data da empresa (ISO UTC → fatia YYYY-MM-DD)
+function dayKey(date: Date | string | null): string | null {
+  if (!date) return null;
+  const s = typeof date === "string" ? date : date.toISOString();
+  return s.slice(0, 10);
 }
 
 // ─── quick status ─────────────────────────────────────────────────────────────
@@ -155,6 +172,99 @@ function CreateRouteDialog({ open, onClose }: { open: boolean; onClose: () => vo
             <Button type="submit" disabled={create.isPending}>{create.isPending ? "Criando…" : "Criar"}</Button>
           </DialogFooter>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── generate route from date dialog ────────────────────────────────────────────
+
+function GenerateRouteDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { data: companies = [] } = useCompanies();
+  const { data: routes = [] } = useRoutes();
+  const generate = useGenerateRoute();
+  const [date, setDate] = useState(() => todayIso());
+  const [error, setError] = useState<string | null>(null);
+
+  const ofDay = useMemo(
+    () =>
+      companies
+        .filter((c) => dayKey(c.date) === date)
+        .sort((a, b) => a.name.localeCompare(b.name, "pt-BR")),
+    [companies, date]
+  );
+  const existing = useMemo(
+    () => routes.filter((r) => dayKey(r.date) === date).length,
+    [routes, date]
+  );
+
+  async function handleGenerate() {
+    if (!ofDay.length) return;
+    setError(null);
+    try {
+      await generate.mutateAsync(date);
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Falha ao gerar rota");
+    }
+  }
+
+  function handleClose() {
+    setError(null);
+    onClose();
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader><DialogTitle>Gerar rota do dia</DialogTitle></DialogHeader>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label>Data</Label>
+            <DatePicker value={date} onChange={(v) => { setDate(v); setError(null); }} />
+          </div>
+
+          {existing > 0 && (
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              Já existe {existing} rota{existing > 1 ? "s" : ""} nesta data — uma nova será criada.
+            </p>
+          )}
+
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs text-muted-foreground">
+              {ofDay.length} empresa{ofDay.length !== 1 ? "s" : ""} nesta data
+            </span>
+            {ofDay.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                Nenhuma empresa cadastrada nesta data.
+              </p>
+            ) : (
+              <div className="flex max-h-56 flex-col gap-0.5 overflow-y-auto rounded-md border p-2">
+                {ofDay.map((c) => (
+                  <div key={c.id} className="flex items-start gap-2 px-1 py-1 text-sm">
+                    <BuildingIcon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{c.name}</p>
+                      {c.address ? (
+                        <p className="truncate text-xs text-muted-foreground">{c.address}</p>
+                      ) : (
+                        <p className="text-xs text-amber-600 dark:text-amber-400">sem endereço</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {error && <p className="text-xs text-destructive">{error}</p>}
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={handleClose}>Cancelar</Button>
+          <Button onClick={handleGenerate} disabled={!ofDay.length || generate.isPending}>
+            {generate.isPending ? "Gerando…" : `Gerar rota (${ofDay.length})`}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -290,13 +400,43 @@ function AddStopDialog({
 
 // ─── stop row ─────────────────────────────────────────────────────────────────
 
-function StopRow({ stop, routeId }: { stop: StopRecord; routeId: string }) {
+function StopRow({
+  stop,
+  routeId,
+  index,
+  total,
+  onMove,
+}: {
+  stop: StopRecord;
+  routeId: string;
+  index: number;
+  total: number;
+  onMove: (index: number, dir: -1 | 1) => void;
+}) {
   const remove = useRemoveStop();
   const markVisited = useMarkStopVisited();
   const visited = !!stop.visitedAt;
 
   return (
-    <div className={cn("flex items-start gap-3 py-3 px-1 rounded-md transition-colors group", visited && "opacity-60")}>
+    <div className={cn("flex items-start gap-2 py-3 px-1 rounded-md transition-colors group", visited && "opacity-60")}>
+      <div className="-my-0.5 flex shrink-0 flex-col">
+        <button
+          onClick={() => onMove(index, -1)}
+          disabled={index === 0}
+          title="Mover para cima"
+          className="text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-25"
+        >
+          <ChevronUpIcon className="size-4" />
+        </button>
+        <button
+          onClick={() => onMove(index, 1)}
+          disabled={index === total - 1}
+          title="Mover para baixo"
+          className="text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-25"
+        >
+          <ChevronDownIcon className="size-4" />
+        </button>
+      </div>
       <button
         onClick={() => markVisited.mutate({ routeId, stopId: stop.id, visited: !visited })}
         className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground transition-colors"
@@ -346,7 +486,17 @@ function RouteSheet({
   onDelete: (r: RouteRecord) => void;
 }) {
   const [addingStop, setAddingStop] = useState(false);
+  const reorder = useReorderStops();
   if (!route) return null;
+
+  function moveStop(index: number, dir: -1 | 1) {
+    if (!route) return;
+    const ids = route.stops.map((s) => s.id);
+    const j = index + dir;
+    if (j < 0 || j >= ids.length) return;
+    [ids[index], ids[j]] = [ids[j], ids[index]];
+    reorder.mutate({ routeId: route.id, orderedIds: ids });
+  }
 
   const visited = route.stops.filter((s) => s.visitedAt).length;
   const cfg = STATUS_CONFIG[route.status];
@@ -412,8 +562,15 @@ function RouteSheet({
               </div>
             ) : (
               <div className="flex flex-col divide-y">
-                {route.stops.map((stop) => (
-                  <StopRow key={stop.id} stop={stop} routeId={route.id} />
+                {route.stops.map((stop, i) => (
+                  <StopRow
+                    key={stop.id}
+                    stop={stop}
+                    routeId={route.id}
+                    index={i}
+                    total={route.stops.length}
+                    onMove={moveStop}
+                  />
                 ))}
               </div>
             )}
@@ -460,9 +617,17 @@ function RouteCard({
   const visited = route.stops.filter((s) => s.visitedAt).length;
 
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
-      className="w-full text-left rounded-lg border bg-card hover:bg-muted/30 transition-colors p-4 flex flex-col gap-3"
+      onKeyDown={(e) => {
+        if ((e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      className="w-full cursor-pointer text-left rounded-lg border bg-card hover:bg-muted/30 transition-colors p-4 flex flex-col gap-3"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
@@ -523,7 +688,7 @@ function RouteCard({
           )}
         </div>
       )}
-    </button>
+    </div>
   );
 }
 
@@ -560,6 +725,7 @@ function DeleteRouteDialog({ route, onClose }: { route: RouteRecord | null; onCl
 export function RoutesView() {
   const { data: routes, isLoading } = useRoutes();
   const [creating, setCreating] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [selectedRoute, setSelectedRoute] = useState<RouteRecord | null>(null);
   const [editingRoute, setEditingRoute] = useState<RouteRecord | null>(null);
   const [deletingRoute, setDeletingRoute] = useState<RouteRecord | null>(null);
@@ -571,7 +737,7 @@ export function RoutesView() {
           <Skeleton className="h-9 flex-1 max-w-xs" />
           <Skeleton className="h-9 w-32 ml-auto" />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4">
           {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-48 rounded-lg" />)}
         </div>
       </div>
@@ -579,10 +745,16 @@ export function RoutesView() {
   }
 
   const list = routes ?? [];
+  // a sheet lê a rota ao vivo do cache (não o snapshot) para refletir
+  // reordenação / visitas / adições / remoções enquanto está aberta
+  const selectedLive = selectedRoute
+    ? list.find((r) => r.id === selectedRoute.id) ?? null
+    : null;
 
   return (
     <>
       <CreateRouteDialog open={creating} onClose={() => setCreating(false)} />
+      <GenerateRouteDialog open={generating} onClose={() => setGenerating(false)} />
       <EditRouteDialog
         route={editingRoute}
         onClose={() => setEditingRoute(null)}
@@ -592,7 +764,7 @@ export function RoutesView() {
         onClose={() => { setDeletingRoute(null); setSelectedRoute(null); }}
       />
       <RouteSheet
-        route={selectedRoute}
+        route={selectedLive}
         onClose={() => setSelectedRoute(null)}
         onEdit={(r) => { setSelectedRoute(null); setEditingRoute(r); }}
         onDelete={(r) => setDeletingRoute(r)}
@@ -601,9 +773,14 @@ export function RoutesView() {
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-3">
           <span className="text-xs text-muted-foreground">{list.length} rota{list.length !== 1 ? "s" : ""}</span>
-          <Button size="sm" className="ml-auto" onClick={() => setCreating(true)}>
-            <PlusIcon className="size-4 mr-1.5" /> Nova Rota
-          </Button>
+          <div className="ml-auto flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => setGenerating(true)}>
+              <CalendarPlusIcon className="size-4 mr-1.5" /> Gerar do dia
+            </Button>
+            <Button size="sm" onClick={() => setCreating(true)}>
+              <PlusIcon className="size-4 mr-1.5" /> Nova Rota
+            </Button>
+          </div>
         </div>
 
         {list.length === 0 ? (
@@ -615,7 +792,7 @@ export function RoutesView() {
             </Button>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4">
             {list.map((route) => (
               <RouteCard
                 key={route.id}

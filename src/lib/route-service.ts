@@ -75,6 +75,53 @@ export async function createRoute(data: RouteCreateInput): Promise<RouteRecord> 
   });
 }
 
+/**
+ * Cria uma rota (Rascunho) a partir das empresas cadastradas com a data informada,
+ * cada empresa virando uma parada. Lança se não houver empresas nessa data.
+ */
+export async function generateRouteFromDate(dateIso: string): Promise<RouteRecord> {
+  const userId = await currentUserId();
+
+  // company.date é armazenada à meia-noite UTC; casamos o dia por intervalo.
+  const start = new Date(`${dateIso}T00:00:00.000Z`);
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 1);
+
+  const companies = await prisma.company.findMany({
+    where: { date: { gte: start, lt: end } },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, address: true, lat: true, lng: true },
+  });
+  if (companies.length === 0) {
+    throw new Error("Nenhuma empresa cadastrada nesta data");
+  }
+
+  const label = new Date(`${dateIso}T12:00:00`).toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+
+  return prisma.route.create({
+    data: {
+      userId,
+      name: `Rota do dia ${label}`,
+      date: start,
+      stops: {
+        create: companies.map((c, i) => ({
+          companyId: c.id,
+          label: c.name,
+          address: c.address ?? "",
+          lat: c.lat,
+          lng: c.lng,
+          order: i,
+        })),
+      },
+    },
+    ...routeInclude,
+  });
+}
+
 export type RouteUpdateInput = {
   name?: string;
   date?: string | null;
@@ -154,4 +201,15 @@ export async function markStopVisited(
     data: { visitedAt: visited ? new Date() : null },
     ...stopInclude,
   });
+}
+
+/** Reordena as paradas: cada id recebe `order` = seu índice na lista. */
+export async function reorderStops(routeId: string, orderedIds: string[]): Promise<void> {
+  const userId = await currentUserId();
+  await assertRouteOwner(routeId, userId);
+  await prisma.$transaction(
+    orderedIds.map((id, index) =>
+      prisma.stop.updateMany({ where: { id, routeId }, data: { order: index } })
+    )
+  );
 }

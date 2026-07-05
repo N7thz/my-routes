@@ -4,30 +4,44 @@ import { useEffect, useRef, useState } from "react";
 import { MapPinIcon, Loader2Icon, LocateFixedIcon, LocateIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-type Stop = { address: string; visitedAt: Date | string | null };
+type Stop = { address: string; visitedAt: Date | string | null; lat?: number | null; lng?: number | null };
 type LatLng = { lat: number; lng: number };
 type UserPos = { lat: number; lng: number; accuracy: number };
 
 // ── Geocode via Nominatim (OpenStreetMap, free, no key) ───────────────────────
+// As chamadas são serializadas (≥1,1s entre elas) para respeitar o rate-limit do
+// Nominatim (1 req/s); disparar em paralelo causava 429 e mapa vazio.
 
 const geocodeCache = new Map<string, LatLng | null>();
+let geoChain: Promise<unknown> = Promise.resolve();
+let lastGeoAt = 0;
 
 async function geocode(address: string): Promise<LatLng | null> {
+  if (!address.trim()) return null;
   if (geocodeCache.has(address)) return geocodeCache.get(address)!;
-  try {
-    const url =
-      "https://nominatim.openstreetmap.org/search?" +
-      new URLSearchParams({ q: address, format: "json", limit: "1", countrycodes: "br" });
-    const res = await fetch(url, { headers: { "Accept-Language": "pt-BR" } });
-    const data = await res.json();
-    if (!data[0]) { geocodeCache.set(address, null); return null; }
-    const result = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
-    geocodeCache.set(address, result);
-    return result;
-  } catch {
-    geocodeCache.set(address, null);
-    return null;
-  }
+
+  const run = geoChain.then(async () => {
+    if (geocodeCache.has(address)) return geocodeCache.get(address)!;
+    const wait = Math.max(0, 1100 - (Date.now() - lastGeoAt));
+    if (wait) await new Promise((r) => setTimeout(r, wait));
+    lastGeoAt = Date.now();
+    try {
+      const url =
+        "https://nominatim.openstreetmap.org/search?" +
+        new URLSearchParams({ q: address, format: "json", limit: "1", countrycodes: "br" });
+      const res = await fetch(url, { headers: { "Accept-Language": "pt-BR" } });
+      const data = await res.json();
+      if (!data[0]) { geocodeCache.set(address, null); return null; }
+      const result = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+      geocodeCache.set(address, result);
+      return result;
+    } catch {
+      geocodeCache.set(address, null);
+      return null;
+    }
+  });
+  geoChain = run.catch(() => {});
+  return run;
 }
 
 // ── OSRM route (free, no key) ─────────────────────────────────────────────────
@@ -165,7 +179,9 @@ export function RouteMap({ stops, dark, userImage }: { stops: Stop[]; dark?: boo
   useEffect(() => {
     if (!containerRef.current || stops.length === 0) return;
 
-    const stopsKey = stops.map((s) => s.address + (s.visitedAt ? "v" : "")).join("|");
+    const stopsKey = stops
+      .map((s) => `${s.address}:${s.lat ?? ""},${s.lng ?? ""}${s.visitedAt ? "v" : ""}`)
+      .join("|");
     const darkChanged = dark !== prevDarkRef.current;
     if (stopsKey === prevStopsKeyRef.current && !darkChanged && mapRef.current) return;
 
@@ -213,8 +229,14 @@ export function RouteMap({ stops, dark, userImage }: { stops: Stop[]; dark?: boo
       routeLayersRef.current.forEach((l) => map.removeLayer(l));
       routeLayersRef.current = [];
 
-      // Geocode all addresses
-      const points = await Promise.all(stops.map((s) => geocode(s.address)));
+      // Prefere coordenadas salvas; geocodifica (serializado) só quando faltarem
+      const points = await Promise.all(
+        stops.map((s) =>
+          typeof s.lat === "number" && typeof s.lng === "number"
+            ? Promise.resolve<LatLng>({ lat: s.lat, lng: s.lng })
+            : geocode(s.address)
+        )
+      );
       if (cancelled) return;
 
       const validPoints = points.filter(Boolean) as LatLng[];
