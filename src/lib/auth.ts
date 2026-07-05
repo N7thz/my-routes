@@ -3,7 +3,14 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "./prisma";
 
 export const auth = betterAuth({
-  baseURL: process.env.NEXT_PUBLIC_APP_URL,
+  // Em produção usamos a URL pública fixa (domínio da Vercel).
+  // Em dev deixamos undefined para o better-auth inferir a origem a partir
+  // da requisição — resolve para http://localhost:<porta> automaticamente,
+  // sem depender de uma porta fixa.
+  baseURL:
+    process.env.NODE_ENV === "production"
+      ? process.env.NEXT_PUBLIC_APP_URL
+      : undefined,
   database: prismaAdapter(prisma, {
     provider: "postgresql",
   }),
