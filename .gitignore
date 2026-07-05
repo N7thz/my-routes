@@ -50,3 +50,5 @@ next-env.d.ts
 
 # verification screenshots
 /scripts/screenshots/
+
+.vercel

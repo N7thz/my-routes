@@ -102,10 +102,10 @@ const FEATURES = [
     desc: "Compartilhamento de rotas entre membros da equipe",
   },
   {
-    done: false,
+    done: true,
     icon: DatabaseIcon,
     title: "Sincronização offline",
-    desc: "PWA com cache local para uso sem internet durante rotas",
+    desc: "PWA instalável com cache local e dados persistidos para uso offline",
   },
 ];
 
