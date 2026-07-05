@@ -16,6 +16,13 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "My Routes",
   description: "My Routes application",
+  manifest: "/manifest.webmanifest",
+  applicationName: "My Routes",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "My Routes",
+  },
 };
 
 export const viewport: Viewport = {
