@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
-import { parseAsString, useQueryState } from "nuqs";
+import { useRef, useState } from "react";
+import { parseAsString, parseAsArrayOf, parseAsStringLiteral, useQueryState } from "nuqs";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
@@ -10,11 +10,14 @@ import type { DatesSetArg, EventClickArg } from "@fullcalendar/core";
 import type FullCalendarType from "@fullcalendar/react";
 import type { CalendarEvent } from "@/lib/google-calendar-service";
 import type { RunrunitTask } from "@/lib/runrunit-service";
+import type { CompanyRecord } from "@/lib/company-service";
 import type { CalendarDateRange } from "@/hooks/use-google-calendar";
 import { RunrunitTaskSheet, type RunrunitTaskDetails } from "@/components/runrunit-task-sheet";
 import { useGoogleCalendar } from "@/hooks/use-google-calendar";
 import { useRunrunitTasks } from "@/hooks/use-runrunit-tasks";
 import { useRunrunitList } from "@/hooks/use-runrunit-list";
+import { useCompanies } from "@/hooks/use-companies";
+import { useSyncTasksToCalendar, SyncTasksError } from "@/hooks/use-sync-tasks-to-calendar";
 import { signIn } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,6 +33,8 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   ClipboardXIcon,
+  CalendarPlusIcon,
+  Loader2Icon,
 } from "lucide-react";
 
 const OVERDUE_COLORS: Record<string, string> = {
@@ -37,6 +42,8 @@ const OVERDUE_COLORS: Record<string, string> = {
   soft_overdue: "#f97316",
   hard_overdue: "#ef4444",
 };
+
+const COMPANY_COLOR = "#8b5cf6";
 
 function toGoogleFCEvent(event: CalendarEvent) {
   return {
@@ -96,6 +103,27 @@ function toRunrunitFCEvent(task: RunrunitTask) {
       taskTitle: task.title,
       parentTitle: task.parent_task_title,
       url: taskUrl,
+    },
+  };
+}
+
+function toCompanyFCEvent(company: CompanyRecord) {
+  if (!company.date) return null;
+  // company.date chega serializado como string ISO pela API.
+  const dateOnly = new Date(company.date).toISOString().slice(0, 10);
+
+  return {
+    id: `co-${company.id}`,
+    title: company.name,
+    start: dateOnly,
+    allDay: true,
+    backgroundColor: COMPANY_COLOR,
+    borderColor: COMPANY_COLOR,
+    extendedProps: {
+      source: "company" as const,
+      companyId: company.id,
+      address: company.address,
+      status: company.status,
     },
   };
 }
@@ -169,17 +197,16 @@ function RunrunitListView({
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
 
-  const sorted = useMemo(() => {
-    if (!Array.isArray(data)) return [];
-    return [...data].sort((a, b) => {
-      const da = taskBestDate(a);
-      const db = taskBestDate(b);
-      if (da && db) return new Date(db).getTime() - new Date(da).getTime();
-      if (da) return -1;
-      if (db) return 1;
-      return b.id - a.id;
-    });
-  }, [data]);
+  const sorted = !Array.isArray(data)
+    ? []
+    : [...data].sort((a, b) => {
+        const da = taskBestDate(a);
+        const db = taskBestDate(b);
+        if (da && db) return new Date(db).getTime() - new Date(da).getTime();
+        if (da) return -1;
+        if (db) return 1;
+        return b.id - a.id;
+      });
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -394,7 +421,42 @@ function ConnectGoogleCard({ reason }: { reason?: string }) {
   );
 }
 
+function SourceToggle({
+  label,
+  color,
+  active,
+  onClick,
+}: {
+  label: string;
+  color: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      title={active ? `Ocultar ${label}` : `Mostrar ${label}`}
+      className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors ${
+        active
+          ? "bg-muted text-foreground"
+          : "text-muted-foreground hover:bg-muted/50"
+      }`}
+    >
+      <span
+        className="size-2 rounded-full transition-opacity"
+        style={{ backgroundColor: color, opacity: active ? 1 : 0.3 }}
+      />
+      <span className="hidden sm:inline">{label}</span>
+    </button>
+  );
+}
+
 type ViewMode = "calendar" | "list";
+
+const SOURCE_KEYS = ["google", "runrunit", "empresas"] as const;
+type SourceKey = (typeof SOURCE_KEYS)[number];
 
 export function GoogleCalendarView() {
   const [month, setMonth] = useQueryState(
@@ -405,21 +467,76 @@ export function GoogleCalendarView() {
   const calendarRef = useRef<FullCalendarType>(null);
   const [range, setRange] = useState<CalendarDateRange | undefined>();
   const [selectedTask, setSelectedTask] = useState<RunrunitTaskDetails | null>(null);
+  const [activeSources, setActiveSources] = useQueryState(
+    "fontes",
+    parseAsArrayOf(parseAsStringLiteral(SOURCE_KEYS))
+      .withDefault([...SOURCE_KEYS])
+      .withOptions({ shallow: true })
+  );
+
+  const sources = {
+    google: activeSources.includes("google"),
+    runrunit: activeSources.includes("runrunit"),
+    empresas: activeSources.includes("empresas"),
+  };
+
+  const toggleSource = (key: SourceKey) => {
+    setActiveSources((prev) => {
+      const cur = prev ?? [...SOURCE_KEYS];
+      const next = cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key];
+      // Mantém a ordem canônica para a URL ficar estável.
+      return SOURCE_KEYS.filter((k) => next.includes(k));
+    });
+  };
 
   const { data: googleData, isLoading: googleLoading } = useGoogleCalendar(range);
   const { data: runrunitData, isFetching: runrunitFetching } = useRunrunitTasks();
+  const { data: companiesData, isFetching: companiesFetching } = useCompanies();
 
-  const handleDatesSet = useCallback(
-    (arg: DatesSetArg) => {
-      setRange({ timeMin: arg.startStr, timeMax: arg.endStr });
-      const current = arg.view.currentStart;
-      const key = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, "0")}`;
-      setMonth(key);
-    },
-    [setMonth]
-  );
+  const sync = useSyncTasksToCalendar();
+  const [syncMsg, setSyncMsg] = useState<
+    { type: "ok" | "err"; text: string; canReconnect?: boolean } | null
+  >(null);
 
-  const handleEventClick = useCallback((arg: EventClickArg) => {
+  const handleSync = () => {
+    setSyncMsg(null);
+    sync.mutate(undefined, {
+      onSuccess: (r) => {
+        setSyncMsg({
+          type: "ok",
+          text:
+            r.created > 0
+              ? `${r.created} tarefa(s) adicionada(s) à agenda`
+              : r.total > 0
+                ? "Tarefas já sincronizadas"
+                : "Nenhuma tarefa com data para sincronizar",
+        });
+      },
+      onError: (e) => {
+        const scopeIssue =
+          e instanceof SyncTasksError &&
+          (e.reason === "no-write-scope" || e.reason === "no-calendar-scope");
+        const text =
+          e instanceof SyncTasksError
+            ? scopeIssue
+              ? "Reconecte o Google para permitir escrita na agenda"
+              : e.reason === "not-connected" || e.reason === "unauthenticated"
+                ? "Conecte sua conta Google primeiro"
+                : "Runrunit não configurado"
+            : "Falha ao sincronizar";
+        setSyncMsg({ type: "err", text, canReconnect: scopeIssue });
+      },
+    });
+  };
+
+  const handleDatesSet = (arg: DatesSetArg) => {
+    setRange({ timeMin: arg.startStr, timeMax: arg.endStr });
+    const current = arg.view.currentStart;
+    const key = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, "0")}`;
+    setMonth(key);
+  };
+
+  const handleEventClick = (arg: EventClickArg) => {
     arg.jsEvent.preventDefault();
     if (arg.event.extendedProps.source === "runrunit") {
       setSelectedTask({
@@ -429,29 +546,29 @@ export function GoogleCalendarView() {
     } else if (arg.event.url) {
       window.open(arg.event.url, "_blank", "noopener,noreferrer");
     }
-  }, []);
+  };
 
-  const handleTaskClick = useCallback((task: RunrunitTask) => {
+  const handleTaskClick = (task: RunrunitTask) => {
     setSelectedTask(taskToDetails(task));
-  }, []);
+  };
 
-  const initialDate = useMemo(() => {
-    if (!month) return undefined;
-    const now = new Date();
-    const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-    return month >= currentKey ? `${month}-01` : undefined;
-  }, [month]);
+  const now = new Date();
+  const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const initialDate = month && month >= currentKey ? `${month}-01` : undefined;
 
-  const { googleEvents, runrunitEvents } = useMemo(() => {
-    const googleEvents = Array.isArray(googleData) ? googleData.map(toGoogleFCEvent) : [];
-    const runrunitEvents = Array.isArray(runrunitData)
-      ? runrunitData.flatMap((t) => {
-          const ev = toRunrunitFCEvent(t);
-          return ev ? [ev] : [];
-        })
-      : [];
-    return { googleEvents, runrunitEvents };
-  }, [googleData, runrunitData]);
+  const googleEvents = Array.isArray(googleData) ? googleData.map(toGoogleFCEvent) : [];
+  const runrunitEvents = Array.isArray(runrunitData)
+    ? runrunitData.flatMap((t) => {
+        const ev = toRunrunitFCEvent(t);
+        return ev ? [ev] : [];
+      })
+    : [];
+  const companyEvents = Array.isArray(companiesData)
+    ? companiesData.flatMap((c) => {
+        const ev = toCompanyFCEvent(c);
+        return ev ? [ev] : [];
+      })
+    : [];
 
   if (!range && googleLoading) return <CalendarSkeleton />;
 
@@ -459,7 +576,7 @@ export function GoogleCalendarView() {
     return <ConnectGoogleCard reason={(googleData as { reason?: string }).reason} />;
   }
 
-  const isFetching = googleLoading || runrunitFetching;
+  const isFetching = googleLoading || runrunitFetching || companiesFetching;
 
   return (
     <>
@@ -471,25 +588,87 @@ export function GoogleCalendarView() {
           }`}
         />
 
-        <div className="flex items-center justify-end gap-1 px-4 py-2 border-b shrink-0">
-          <Button
-            variant={viewMode === "calendar" ? "secondary" : "ghost"}
-            size="icon"
-            className="size-7"
-            onClick={() => setViewMode("calendar")}
-            title="Calendário"
-          >
-            <CalendarDaysIcon className="size-4" />
-          </Button>
-          <Button
-            variant={viewMode === "list" ? "secondary" : "ghost"}
-            size="icon"
-            className="size-7"
-            onClick={() => setViewMode("list")}
-            title="Lista"
-          >
-            <ListIcon className="size-4" />
-          </Button>
+        <div className="flex items-center justify-between gap-2 px-4 py-2 border-b shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 gap-1.5"
+              onClick={handleSync}
+              disabled={sync.isPending}
+              title="Verifica tarefas atribuídas a você e adiciona ao Google Agenda"
+            >
+              {sync.isPending ? (
+                <Loader2Icon className="size-4 animate-spin" />
+              ) : (
+                <CalendarPlusIcon className="size-4" />
+              )}
+              <span className="hidden sm:inline">Sincronizar tarefas</span>
+            </Button>
+            {syncMsg && (
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span
+                  className={`text-xs truncate ${
+                    syncMsg.type === "err" ? "text-destructive" : "text-muted-foreground"
+                  }`}
+                >
+                  {syncMsg.text}
+                </span>
+                {syncMsg.canReconnect && (
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="h-auto p-0 text-xs shrink-0"
+                    onClick={() => signIn.social({ provider: "google", callbackURL: "/" })}
+                  >
+                    Reconectar
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            {viewMode === "calendar" && (
+              <div className="flex items-center gap-1 mr-1">
+                <SourceToggle
+                  label="Google"
+                  color="#4285F4"
+                  active={sources.google}
+                  onClick={() => toggleSource("google")}
+                />
+                <SourceToggle
+                  label="Runrunit"
+                  color="#10b981"
+                  active={sources.runrunit}
+                  onClick={() => toggleSource("runrunit")}
+                />
+                <SourceToggle
+                  label="Empresas"
+                  color={COMPANY_COLOR}
+                  active={sources.empresas}
+                  onClick={() => toggleSource("empresas")}
+                />
+              </div>
+            )}
+            <Button
+              variant={viewMode === "calendar" ? "secondary" : "ghost"}
+              size="icon"
+              className="size-7"
+              onClick={() => setViewMode("calendar")}
+              title="Calendário"
+            >
+              <CalendarDaysIcon className="size-4" />
+            </Button>
+            <Button
+              variant={viewMode === "list" ? "secondary" : "ghost"}
+              size="icon"
+              className="size-7"
+              onClick={() => setViewMode("list")}
+              title="Lista"
+            >
+              <ListIcon className="size-4" />
+            </Button>
+          </div>
         </div>
 
         {viewMode === "list" ? (
@@ -513,7 +692,11 @@ export function GoogleCalendarView() {
                 week: "Semana",
                 day: "Dia",
               }}
-              events={[...googleEvents, ...runrunitEvents]}
+              events={[
+                ...(sources.google ? googleEvents : []),
+                ...(sources.runrunit ? runrunitEvents : []),
+                ...(sources.empresas ? companyEvents : []),
+              ]}
               datesSet={handleDatesSet}
               eventClick={handleEventClick}
               height="100%"

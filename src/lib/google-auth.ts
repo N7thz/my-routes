@@ -3,10 +3,21 @@ import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.readonly";
+// Escopos que permitem LER eventos (qualquer um serve). Inclui o antigo
+// readonly para não quebrar contas conectadas antes da migração para escrita.
+const READ_SCOPES = [
+  "https://www.googleapis.com/auth/calendar.readonly",
+  "https://www.googleapis.com/auth/calendar.events",
+  "https://www.googleapis.com/auth/calendar",
+];
+// Escopos que permitem CRIAR/editar eventos.
+const WRITE_SCOPES = [
+  "https://www.googleapis.com/auth/calendar.events",
+  "https://www.googleapis.com/auth/calendar",
+];
 
 type GoogleAccountResult =
-  | { accessToken: string; hasCalendarScope: true }
+  | { accessToken: string; hasCalendarScope: true; canWriteEvents: boolean }
   | { accessToken: null; hasCalendarScope: false; reason: "not-connected" | "no-calendar-scope" | "unauthenticated" };
 
 async function refreshGoogleToken(
@@ -56,21 +67,24 @@ export async function getGoogleCalendarToken(): Promise<GoogleAccountResult> {
 
   if (!account) return { accessToken: null, hasCalendarScope: false, reason: "not-connected" };
 
-  if (!account.scope?.includes(CALENDAR_SCOPE)) {
+  const scope = account.scope ?? "";
+  const hasReadScope = READ_SCOPES.some((s) => scope.includes(s));
+  if (!hasReadScope) {
     return { accessToken: null, hasCalendarScope: false, reason: "no-calendar-scope" };
   }
+  const canWriteEvents = WRITE_SCOPES.some((s) => scope.includes(s));
 
   const isExpired = account.accessTokenExpiresAt
     ? account.accessTokenExpiresAt < new Date()
     : false;
 
   if (!isExpired && account.accessToken) {
-    return { accessToken: account.accessToken, hasCalendarScope: true };
+    return { accessToken: account.accessToken, hasCalendarScope: true, canWriteEvents };
   }
 
   if (account.refreshToken) {
     const refreshed = await refreshGoogleToken(account.id, account.refreshToken);
-    if (refreshed) return { accessToken: refreshed, hasCalendarScope: true };
+    if (refreshed) return { accessToken: refreshed, hasCalendarScope: true, canWriteEvents };
   }
 
   return { accessToken: null, hasCalendarScope: false, reason: "no-calendar-scope" };
