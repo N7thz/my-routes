@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isRunrunitConfigured } from "@/lib/runrunit-service";
-import { syncRunrunitTasksToRoutes } from "@/lib/route-service";
+import { syncCalendarEventsToRoutes, syncRunrunitTasksToRoutes } from "@/lib/route-service";
 
 // Roda a cada requisição (usa headers + banco); nunca cacheado.
 export const dynamic = "force-dynamic";
@@ -12,10 +12,6 @@ export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (secret && request.headers.get("authorization") !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  if (!isRunrunitConfigured()) {
-    return NextResponse.json({ error: "Runrunit não configurado" }, { status: 503 });
   }
 
   const email = process.env.CRON_USER_EMAIL;
@@ -31,6 +27,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: `Usuário ${email} não encontrado` }, { status: 404 });
   }
 
-  const result = await syncRunrunitTasksToRoutes(user.id);
-  return NextResponse.json(result);
+  // As duas fontes são independentes: uma indisponível não impede a outra.
+  const runrunit = isRunrunitConfigured()
+    ? await syncRunrunitTasksToRoutes(user.id)
+    : { skipped: "runrunit-nao-configurado" };
+
+  const calendar = await syncCalendarEventsToRoutes(user.id);
+
+  return NextResponse.json({ runrunit, calendar });
 }

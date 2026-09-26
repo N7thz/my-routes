@@ -4,6 +4,11 @@ import { useMemo, useState } from "react";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import { useRoutes, useMarkStopVisited, useUpdateRoute, useReorderStops } from "@/hooks/use-routes";
+import {
+  useAutoSyncCalendarRoutes,
+  SyncCalendarRoutesError,
+} from "@/hooks/use-sync-calendar-routes";
+import { signIn } from "@/lib/auth-client";
 import type { RouteRecord, RouteStatus, StopRecord } from "@/lib/route-service";
 import { RouteMap } from "@/components/route-map";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +41,7 @@ import {
   ChevronRightIcon,
   RouteIcon,
   CalendarDaysIcon,
+  CalendarSyncIcon,
 } from "lucide-react";
 import { RoutesView } from "@/components/routes-view";
 
@@ -222,7 +228,15 @@ function StopItem({
 
 // ── Empty states ─────────────────────────────────────────────────────────────────
 
-function EmptyState({ onManage }: { onManage: () => void }) {
+function EmptyState({
+  onManage,
+  onSync,
+  syncing,
+}: {
+  onManage: () => void;
+  onSync: () => void;
+  syncing: boolean;
+}) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
       <div className="flex size-16 items-center justify-center rounded-2xl bg-muted">
@@ -231,12 +245,22 @@ function EmptyState({ onManage }: { onManage: () => void }) {
       <div>
         <p className="font-semibold">Nenhuma rota criada</p>
         <p className="mt-1 text-sm text-muted-foreground">
-          Crie sua primeira rota para começar a planejar visitas.
+          Gere as rotas a partir dos eventos da sua agenda ou crie a primeira manualmente.
         </p>
       </div>
-      <Button onClick={onManage} className="mt-2">
-        Criar primeira rota
-      </Button>
+      <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
+        <Button onClick={onSync} disabled={syncing}>
+          {syncing ? (
+            <Loader2Icon className="mr-1 size-4 animate-spin" />
+          ) : (
+            <CalendarSyncIcon className="mr-1 size-4" />
+          )}
+          Buscar na agenda
+        </Button>
+        <Button variant="outline" onClick={onManage}>
+          Criar rota manualmente
+        </Button>
+      </div>
     </div>
   );
 }
@@ -382,6 +406,8 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
   const markVisited = useMarkStopVisited();
   const updateRoute = useUpdateRoute();
   const reorder = useReorderStops();
+  // Roda uma vez ao abrir a página (com throttle) e alimenta o botão manual.
+  const syncCalendar = useAutoSyncCalendarRoutes();
   const { resolvedTheme } = useTheme();
 
   // selectedDay: null = padrão (hoje) · UNDATED = bucket sem data · senão "YYYY-MM-DD"
@@ -468,21 +494,42 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
     reorder.mutate({ routeId: route.id, orderedIds: ids });
   }
 
-  if (isLoading) {
+  // Enquanto a primeira sincronização roda, ainda pode aparecer rota — não
+  // mostrar "nenhuma rota criada" antes dela responder.
+  if (isLoading || (routes.length === 0 && syncCalendar.isPending)) {
     return (
       <div className="flex h-full items-center justify-center gap-2 text-muted-foreground">
         <Loader2Icon className="size-4 animate-spin" />
-        <span className="text-sm">Carregando rotas…</span>
+        <span className="text-sm">
+          {routes.length === 0 && syncCalendar.isPending
+            ? "Buscando eventos na agenda…"
+            : "Carregando rotas…"}
+        </span>
       </div>
     );
   }
 
   // nenhuma rota em todo o sistema
   if (routes.length === 0) {
-    return <EmptyState onManage={() => setManageOpen(true)} />;
+    return (
+      <EmptyState
+        onManage={() => setManageOpen(true)}
+        onSync={() => syncCalendar.mutate()}
+        syncing={syncCalendar.isPending}
+      />
+    );
   }
 
   const statusCfg = route ? STATUS_CONFIG[route.status] : null;
+
+  const syncNeedsGoogle =
+    syncCalendar.error instanceof SyncCalendarRoutesError &&
+    syncCalendar.error.reason !== "unauthenticated";
+  const syncTitle = syncNeedsGoogle
+    ? "Conecte o Google Agenda para gerar rotas dos eventos"
+    : syncCalendar.isError
+      ? "Falha ao atualizar pela agenda — clique para tentar de novo"
+      : "Atualizar rotas com os eventos da agenda";
 
   return (
     <div className="flex h-full flex-col">
@@ -646,10 +693,38 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
           </div>
         )}
 
+        {/* Sync com a agenda */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="ml-auto shrink-0 size-8 sm:ml-0"
+          onClick={() => syncCalendar.mutate()}
+          disabled={syncCalendar.isPending}
+          title={syncTitle}
+        >
+          {syncCalendar.isPending ? (
+            <Loader2Icon className="size-4 animate-spin" />
+          ) : (
+            <CalendarSyncIcon
+              className={cn("size-4", syncCalendar.isError && "text-destructive")}
+            />
+          )}
+        </Button>
+        {syncNeedsGoogle && (
+          <Button
+            variant="link"
+            size="sm"
+            className="h-auto shrink-0 p-0 text-xs"
+            onClick={() => signIn.social({ provider: "google", callbackURL: "/rotas" })}
+          >
+            Conectar agenda
+          </Button>
+        )}
+
         {/* Manage sheet */}
         <Sheet open={manageOpen} onOpenChange={setManageOpen}>
           <SheetTrigger asChild>
-            <Button variant="ghost" size="icon" className="ml-auto shrink-0 size-8 sm:ml-0" title="Gerenciar rotas">
+            <Button variant="ghost" size="icon" className="shrink-0 size-8" title="Gerenciar rotas">
               <Settings2Icon className="size-4" />
             </Button>
           </SheetTrigger>

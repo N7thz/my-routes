@@ -50,12 +50,15 @@ async function refreshGoogleToken(
   return data.access_token;
 }
 
-export async function getGoogleCalendarToken(): Promise<GoogleAccountResult> {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session?.user) return { accessToken: null, hasCalendarScope: false, reason: "unauthenticated" };
-
+/**
+ * Versão sem sessão: recebe o usuário explicitamente. Usada por jobs que rodam
+ * fora de uma requisição autenticada (ex.: cron da Vercel).
+ */
+export async function getGoogleCalendarTokenForUser(
+  userId: string
+): Promise<GoogleAccountResult> {
   const account = await prisma.account.findFirst({
-    where: { userId: session.user.id, providerId: "google" },
+    where: { userId, providerId: "google" },
     select: {
       id: true,
       accessToken: true,
@@ -88,4 +91,12 @@ export async function getGoogleCalendarToken(): Promise<GoogleAccountResult> {
   }
 
   return { accessToken: null, hasCalendarScope: false, reason: "no-calendar-scope" };
+}
+
+export async function getGoogleCalendarToken(): Promise<GoogleAccountResult> {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session?.user) {
+    return { accessToken: null, hasCalendarScope: false, reason: "unauthenticated" };
+  }
+  return getGoogleCalendarTokenForUser(session.user.id);
 }
