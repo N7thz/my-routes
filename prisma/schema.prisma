@@ -29,11 +29,27 @@ model Company {
   status       CompanyStatus?
   observations String?
   notionId     String?        @unique
+  groupId      String?        @map("group_id")
+  group        CompanyGroup?  @relation(fields: [groupId], references: [id], onDelete: SetNull)
   stops        Stop[]
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 
+  @@index([groupId])
   @@map("company")
+}
+
+// Agrupamento livre de empresas (ex.: por região, cliente, contrato).
+// Cada empresa pertence a no máximo um grupo.
+model CompanyGroup {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  color     String?
+  companies Company[]
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@map("company_group")
 }
 
 // --- Rotas ---

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import {
   useQueryState,
   parseAsString,
@@ -8,10 +8,13 @@ import {
   parseAsStringLiteral,
   parseAsNumberLiteral,
   parseAsArrayOf,
+  parseAsBoolean,
   debounce,
 } from "nuqs";
 import { cn } from "@/lib/utils";
 import { useCompanies, useUpdateCompany, useDeleteCompany, useCreateCompany } from "@/hooks/use-companies";
+import { useCompanyGroups, type CompanyGroupRecord } from "@/hooks/use-company-groups";
+import { CompanyGroupsDialog, GroupDot } from "@/components/company-groups-dialog";
 import { useCnpjLookup, formatCnpj } from "@/hooks/use-cnpj";
 import { DatePicker } from "@/components/ui/date-picker";
 import { useRoutes, useCreateRoute, useAddStop, type RouteRecord } from "@/hooks/use-routes";
@@ -51,6 +54,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -87,11 +93,14 @@ import {
   MapPinIcon,
   RouteIcon,
   CheckIcon,
+  FoldersIcon,
+  LayersIcon,
 } from "lucide-react";
 
 // ─── tipos ────────────────────────────────────────────────────────────────────
 
 type EnrichedCompany = CompanyRecord & {
+  group: CompanyGroupRecord | null;
   tasks: RunrunitTask[];
   events: CalendarEvent[];
   openCount: number;
@@ -102,7 +111,7 @@ type EnrichedCompany = CompanyRecord & {
   nextEvent: CalendarEvent | null;
 };
 
-type SortKey = "name" | "open" | "urgent" | "overdue" | "closed" | "status" | "nextEvent";
+type SortKey = "name" | "open" | "urgent" | "overdue" | "closed" | "status" | "nextEvent" | "group";
 type SortDir = "asc" | "desc";
 
 const PER_PAGE_OPTIONS = [12, 24, 48, 96] as const;
@@ -110,10 +119,13 @@ type PerPage = (typeof PER_PAGE_OPTIONS)[number];
 
 // ─── literais para os parsers de URL (nuqs) ────────────────────────────────────
 
-const SORT_KEYS = ["name", "open", "urgent", "overdue", "closed", "status", "nextEvent"] as const;
+const SORT_KEYS = ["name", "open", "urgent", "overdue", "closed", "status", "nextEvent", "group"] as const;
 const SORT_DIRS = ["asc", "desc"] as const;
 const VIEW_MODES = ["cards", "table"] as const;
 const STATUS_KEYS = ["PENDENTE", "EM_ANDAMENTO", "CONCLUIDO", "REVISAO"] as const;
+
+// Valor usado no filtro/Select para representar "sem grupo" (Radix Select não aceita "").
+const NO_GROUP = "none";
 
 // ─── status config ────────────────────────────────────────────────────────────
 
@@ -231,9 +243,11 @@ function taskToDetails(task: RunrunitTask): RunrunitTaskDetails {
 function enrichCompanies(
   companies: CompanyRecord[],
   tasks: RunrunitTask[],
-  events: CalendarEvent[]
+  events: CalendarEvent[],
+  groups: CompanyGroupRecord[]
 ): EnrichedCompany[] {
   const now = new Date();
+  const groupsById = new Map(groups.map((g) => [g.id, g]));
 
   return companies.map((company) => {
     const nameLower = company.name.toLowerCase();
@@ -255,6 +269,7 @@ function enrichCompanies(
 
     return {
       ...company,
+      group: company.groupId ? groupsById.get(company.groupId) ?? null : null,
       tasks: matched,
       events: matchedEvents,
       openCount: matched.filter((t) => !t.is_closed).length,
@@ -279,6 +294,10 @@ function sortCompanies(list: EnrichedCompany[], key: SortKey, dir: SortDir): Enr
       case "status":
         cmp = (a.status ?? "").localeCompare(b.status ?? "", "pt-BR");
         break;
+      case "group":
+        // Empresas sem grupo ficam por último na ordem ascendente.
+        cmp = (a.group?.name ?? "￿").localeCompare(b.group?.name ?? "￿", "pt-BR");
+        break;
       case "nextEvent": {
         const da = a.nextEvent ? eventStart(a.nextEvent).getTime() : Infinity;
         const db = b.nextEvent ? eventStart(b.nextEvent).getTime() : Infinity;
@@ -288,6 +307,33 @@ function sortCompanies(list: EnrichedCompany[], key: SortKey, dir: SortDir): Enr
     }
     return dir === "asc" ? cmp : -cmp;
   });
+}
+
+// ─── group select ────────────────────────────────────────────────────────────
+
+function GroupSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const { data: groups = [] } = useCompanyGroups();
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label>Grupo</Label>
+      <Select value={value || NO_GROUP} onValueChange={(v) => onChange(v === NO_GROUP ? "" : v)}>
+        <SelectTrigger>
+          <SelectValue placeholder="Sem grupo" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={NO_GROUP}>Sem grupo</SelectItem>
+          {groups.map((g) => (
+            <SelectItem key={g.id} value={g.id}>
+              <span className="flex items-center gap-2">
+                <GroupDot color={g.color} />
+                {g.name}
+              </span>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
 }
 
 // ─── create dialog ───────────────────────────────────────────────────────────
@@ -303,10 +349,11 @@ function CreateCompanyDialog({ open, onClose }: { open: boolean; onClose: () => 
     date: string;
     time: string;
     observations: string;
-  }>(() => ({ name: "", cnpj: "", address: "", status: "PENDENTE", date: todayIso(), time: "", observations: "" }));
+    groupId: string;
+  }>(() => ({ name: "", cnpj: "", address: "", status: "PENDENTE", date: todayIso(), time: "", observations: "", groupId: "" }));
 
   function resetForm() {
-    setForm({ name: "", cnpj: "", address: "", status: "PENDENTE", date: todayIso(), time: "", observations: "" });
+    setForm({ name: "", cnpj: "", address: "", status: "PENDENTE", date: todayIso(), time: "", observations: "", groupId: "" });
     cnpjLookup.reset();
   }
 
@@ -330,6 +377,7 @@ function CreateCompanyDialog({ open, onClose }: { open: boolean; onClose: () => 
       status: (form.status as CompanyStatus) || null,
       date: combineDateTime(form.date, form.time),
       observations: form.observations || null,
+      groupId: form.groupId || null,
     });
     resetForm();
     onClose();
@@ -434,6 +482,7 @@ function CreateCompanyDialog({ open, onClose }: { open: boolean; onClose: () => 
               className="w-40"
             />
           </div>
+          <GroupSelect value={form.groupId} onChange={(v) => setForm((f) => ({ ...f, groupId: v }))} />
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="cc-obs">Observações</Label>
             <Textarea
@@ -476,7 +525,8 @@ function EditCompanyDialog({
     date: string;
     time: string;
     observations: string;
-  }>({ name: "", cnpj: "", address: "", status: "", date: "", time: "", observations: "" });
+    groupId: string;
+  }>({ name: "", cnpj: "", address: "", status: "", date: "", time: "", observations: "", groupId: "" });
 
   useMemo(() => {
     if (company) {
@@ -489,6 +539,7 @@ function EditCompanyDialog({
         date: company.date ? new Date(company.date).toISOString().slice(0, 10) : "",
         time: timeFromDate(company.date),
         observations: company.observations ?? "",
+        groupId: company.groupId ?? "",
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -517,6 +568,7 @@ function EditCompanyDialog({
         status: (form.status as CompanyStatus) || null,
         date: combineDateTime(form.date, form.time),
         observations: form.observations || null,
+        groupId: form.groupId || null,
       },
     });
     onClose();
@@ -616,6 +668,7 @@ function EditCompanyDialog({
               className="w-40"
             />
           </div>
+          <GroupSelect value={form.groupId} onChange={(v) => setForm((f) => ({ ...f, groupId: v }))} />
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="ec-obs">Observações</Label>
             <Textarea
@@ -757,6 +810,7 @@ function CompanySheet({
           </div>
           <SheetTitle className="text-lg">{company.name}</SheetTitle>
           <div className="flex flex-wrap gap-2 mt-1">
+            {company.group && <GroupBadge group={company.group} />}
             {statusCfg && <Badge variant={statusCfg.variant} className={statusCfg.className}>{statusCfg.label}</Badge>}
             <Badge variant="outline">{company.openCount} abertas</Badge>
             {company.urgentCount > 0 && (
@@ -1166,6 +1220,53 @@ function QuickStatusMenu({ company }: { company: EnrichedCompany }) {
 
 // ─── card view ────────────────────────────────────────────────────────────────
 
+function GroupBadge({ group, className }: { group: CompanyGroupRecord; className?: string }) {
+  return (
+    <Badge variant="outline" className={cn("gap-1.5 font-normal", className)}>
+      <GroupDot color={group.color} />
+      <span className="truncate">{group.name}</span>
+    </Badge>
+  );
+}
+
+function MoveToGroupSubmenu({ company }: { company: EnrichedCompany }) {
+  const { data: groups = [] } = useCompanyGroups();
+  const update = useUpdateCompany();
+
+  function move(groupId: string | null) {
+    if (groupId === company.groupId) return;
+    update.mutate({ id: company.id, data: { groupId } });
+  }
+
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger onClick={(e) => e.stopPropagation()}>
+        <FoldersIcon className="size-3.5 mr-2" /> Mover para grupo
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent onClick={(e) => e.stopPropagation()}>
+        {groups.length === 0 && (
+          <DropdownMenuItem disabled className="text-xs">Nenhum grupo criado</DropdownMenuItem>
+        )}
+        {groups.map((g) => (
+          <DropdownMenuItem key={g.id} onClick={() => move(g.id)} className="gap-2">
+            <GroupDot color={g.color} />
+            <span className="flex-1 truncate">{g.name}</span>
+            {company.groupId === g.id && <CheckIcon className="size-3.5" />}
+          </DropdownMenuItem>
+        ))}
+        {company.groupId && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => move(null)} className="text-muted-foreground text-xs">
+              Remover do grupo
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
+  );
+}
+
 function CompanyActionsMenu({
   company,
   onEdit,
@@ -1196,6 +1297,7 @@ function CompanyActionsMenu({
         >
           <RouteIcon className="size-3.5 mr-2" /> Adicionar à rota
         </DropdownMenuItem>
+        <MoveToGroupSubmenu company={company} />
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={(e) => { e.stopPropagation(); onEdit(company); }}
@@ -1259,6 +1361,12 @@ function CompanyCard({
         </div>
       )}
 
+      {company.group && (
+        <div className="flex">
+          <GroupBadge group={company.group} className="text-xs max-w-full" />
+        </div>
+      )}
+
       {company.projectNames.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {company.projectNames.slice(0, 3).map((p) => (
@@ -1319,6 +1427,9 @@ function CompanyTable({
             <th className="text-left px-4 py-2.5">
               <SortHeader label="Status" sortKey="status" current={sortKey} dir={sortDir} onSort={onSort} />
             </th>
+            <th className="text-left px-4 py-2.5 hidden lg:table-cell">
+              <SortHeader label="Grupo" sortKey="group" current={sortKey} dir={sortDir} onSort={onSort} />
+            </th>
             <th className="text-left px-4 py-2.5 hidden sm:table-cell">
               <span className="text-xs font-medium text-muted-foreground">CNPJ</span>
             </th>
@@ -1356,6 +1467,11 @@ function CompanyTable({
                 </td>
                 <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                   <QuickStatusMenu company={company} />
+                </td>
+                <td className="px-4 py-3 hidden lg:table-cell">
+                  {company.group
+                    ? <GroupBadge group={company.group} className="text-xs max-w-[160px]" />
+                    : <span className="text-xs text-muted-foreground">—</span>}
                 </td>
                 <td className="px-4 py-3 text-xs text-muted-foreground hidden sm:table-cell">
                   {company.cnpj ?? "—"}
@@ -1412,6 +1528,8 @@ function CompanyTable({
 
 // ─── main view ────────────────────────────────────────────────────────────────
 
+const subscribeNoop = () => () => {};
+
 export function CompaniesView() {
   // Todos os filtros vivem na URL (nuqs). O estado retornado atualiza na hora;
   // só a escrita na URL da busca é adiada via debounce para não poluir o histórico.
@@ -1443,6 +1561,16 @@ export function CompaniesView() {
     "perPage",
     parseAsNumberLiteral(PER_PAGE_OPTIONS).withDefault(12)
   );
+  const [groupFilter, setGroupFilter] = useQueryState(
+    "groups",
+    parseAsArrayOf(parseAsString).withDefault([])
+  );
+  const [groupBy, setGroupBy] = useQueryState(
+    "groupBy",
+    parseAsBoolean.withDefault(false).withOptions({ clearOnDefault: true })
+  );
+  const [managingGroups, setManagingGroups] = useState(false);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
   const [creatingCompany, setCreatingCompany] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState<EnrichedCompany | null>(null);
   const [editingCompany, setEditingCompany] = useState<EnrichedCompany | null>(null);
@@ -1461,15 +1589,22 @@ export function CompaniesView() {
   const { data: companiesData, isLoading: companiesLoading } = useCompanies();
   const { data: tasksData, isLoading: tasksLoading } = useRunrunitList();
   const { data: calendarData, isLoading: calendarLoading } = useGoogleCalendar(calendarRange);
+  const { data: groupsData, isLoading: groupsLoading } = useCompanyGroups();
+  const groups = groupsData ?? [];
 
-  const isLoading = companiesLoading || tasksLoading || calendarLoading;
+  // O servidor nunca tem dados, mas o client pode já ter restaurado o cache do
+  // localStorage quando o <Suspense> hidrata. Mantém o skeleton até hidratar
+  // para o primeiro render do client bater com o HTML do servidor.
+  const hydrated = useSyncExternalStore(subscribeNoop, () => true, () => false);
+
+  const isLoading = !hydrated || companiesLoading || tasksLoading || calendarLoading || groupsLoading;
 
   const enriched = useMemo(() => {
     const companies = companiesData ?? [];
     const tasks = Array.isArray(tasksData) ? tasksData : [];
     const events = Array.isArray(calendarData) ? calendarData : [];
-    return enrichCompanies(companies, tasks, events);
-  }, [companiesData, tasksData, calendarData]);
+    return enrichCompanies(companies, tasks, events, groupsData ?? []);
+  }, [companiesData, tasksData, calendarData, groupsData]);
 
   function toggleStatusFilter(key: CompanyStatus) {
     setStatusFilter((prev) => {
@@ -1482,6 +1617,29 @@ export function CompaniesView() {
     setPage(1);
   }
 
+  function toggleGroupFilter(key: string) {
+    setGroupFilter((prev) => {
+      const arr = prev ?? [];
+      const next = arr.includes(key) ? arr.filter((k) => k !== key) : [...arr, key];
+      return next.length > 0 ? next : null;
+    });
+    setPage(1);
+  }
+
+  function toggleCollapsed(key: string) {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  function clearFilters() {
+    setStatusFilter(null);
+    setGroupFilter(null);
+  }
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     let list = q
@@ -1489,14 +1647,39 @@ export function CompaniesView() {
           (c) =>
             c.name.toLowerCase().includes(q) ||
             c.cnpj?.includes(q) ||
+            c.group?.name.toLowerCase().includes(q) ||
             c.projectNames.some((p) => p.toLowerCase().includes(q))
         )
       : enriched;
     if (statusFilter.length > 0) {
       list = list.filter((c) => c.status !== null && statusFilter.includes(c.status));
     }
+    if (groupFilter.length > 0) {
+      list = list.filter((c) => groupFilter.includes(c.groupId ?? NO_GROUP));
+    }
     return sortCompanies(list, sortKey, sortDir);
-  }, [enriched, search, statusFilter, sortKey, sortDir]);
+  }, [enriched, search, statusFilter, groupFilter, sortKey, sortDir]);
+
+  // Agrupado: mostra todas as empresas filtradas em seções (sem paginação),
+  // na ordem alfabética dos grupos e com "Sem grupo" por último.
+  const sections = groupBy
+    ? [
+        ...groups.map((g) => ({
+          key: g.id,
+          label: g.name,
+          color: g.color,
+          items: filtered.filter((c) => c.groupId === g.id),
+        })),
+        {
+          key: NO_GROUP,
+          label: "Sem grupo",
+          color: null,
+          items: filtered.filter((c) => !c.group),
+        },
+      ].filter((s) => s.items.length > 0)
+    : [];
+
+  const hasFilters = statusFilter.length > 0 || groupFilter.length > 0;
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
   const safePage = Math.min(Math.max(1, page), totalPages);
@@ -1525,6 +1708,11 @@ export function CompaniesView() {
 
   return (
     <>
+      <CompanyGroupsDialog
+        open={managingGroups}
+        onClose={() => setManagingGroups(false)}
+        companies={companiesData ?? []}
+      />
       <RunrunitTaskSheet task={selectedTask} onClose={() => setSelectedTask(null)} />
       <CreateCompanyDialog
         open={creatingCompany}
@@ -1574,12 +1762,26 @@ export function CompaniesView() {
             {filtered.length} empresa{filtered.length !== 1 ? "s" : ""}
           </span>
           <div className="flex items-center gap-2 ml-auto">
+            <Button size="sm" variant="outline" onClick={() => setManagingGroups(true)}>
+              <FoldersIcon className="size-4 mr-1.5" />
+              Grupos
+            </Button>
             <Button size="sm" onClick={() => setCreatingCompany(true)}>
               <PlusIcon className="size-4 mr-1.5" />
               Nova Empresa
             </Button>
+            <Button
+              variant={groupBy ? "secondary" : "ghost"}
+              size="icon"
+              className="size-8"
+              onClick={() => setGroupBy(groupBy ? null : true)}
+              title={groupBy ? "Desagrupar" : "Agrupar por grupo"}
+            >
+              <LayersIcon className="size-4" />
+            </Button>
             <Select
               value={String(perPage)}
+              disabled={groupBy}
               onValueChange={(v) => { setPerPage(Number(v) as PerPage); setPage(1); }}
             >
               <SelectTrigger className="h-8 w-24 text-xs">
@@ -1629,9 +1831,28 @@ export function CompaniesView() {
               </button>
             );
           })}
-          {statusFilter.length > 0 && (
+          {groups.length > 0 && (
+            <>
+              <Separator orientation="vertical" className="h-4 mx-1" />
+              {[...groups, { id: NO_GROUP, name: "Sem grupo", color: null }].map((g) => {
+                const active = groupFilter.includes(g.id);
+                return (
+                  <button key={g.id} onClick={() => toggleGroupFilter(g.id)}>
+                    <Badge
+                      variant={active ? "secondary" : "outline"}
+                      className={cn("cursor-pointer gap-1.5 transition-opacity", !active && "opacity-50 hover:opacity-80")}
+                    >
+                      {g.id !== NO_GROUP && <GroupDot color={g.color} />}
+                      {g.name}
+                    </Badge>
+                  </button>
+                );
+              })}
+            </>
+          )}
+          {hasFilters && (
             <button
-              onClick={() => setStatusFilter(null)}
+              onClick={clearFilters}
               className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-1"
             >
               Limpar filtros
@@ -1648,20 +1869,70 @@ export function CompaniesView() {
           <div className="flex flex-col items-center justify-center gap-2 py-16 text-muted-foreground">
             <ClipboardXIcon className="size-8" />
             <p className="text-sm">
-              {search && statusFilter.length > 0
+              {search && hasFilters
                 ? `Nenhuma empresa para "${search}" com os filtros selecionados`
                 : search
                 ? `Nenhuma empresa encontrada para "${search}"`
                 : "Nenhuma empresa com os filtros selecionados"}
             </p>
-            {statusFilter.length > 0 && (
+            {hasFilters && (
               <button
-                onClick={() => setStatusFilter(null)}
+                onClick={clearFilters}
                 className="text-xs text-primary hover:underline"
               >
                 Limpar filtros
               </button>
             )}
+          </div>
+        ) : groupBy ? (
+          <div className="flex flex-col gap-6">
+            {sections.map((section) => {
+              const collapsed = collapsedGroups.has(section.key);
+              return (
+                <section key={section.key} className="flex flex-col gap-3">
+                  <button
+                    onClick={() => toggleCollapsed(section.key)}
+                    className="flex items-center gap-2 text-left group w-fit"
+                  >
+                    {collapsed
+                      ? <ChevronRightIcon className="size-4 text-muted-foreground" />
+                      : <ChevronDownIcon className="size-4 text-muted-foreground" />}
+                    {section.key === NO_GROUP
+                      ? <span className="size-2.5 rounded-full border border-dashed border-muted-foreground shrink-0" />
+                      : <GroupDot color={section.color} className="size-2.5" />}
+                    <span className="text-sm font-semibold group-hover:underline">{section.label}</span>
+                    <span className="text-xs text-muted-foreground tabular-nums">{section.items.length}</span>
+                  </button>
+                  {!collapsed && (viewMode === "cards" ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                      {section.items.map((company) => (
+                        <CompanyCard
+                          key={company.id}
+                          company={company}
+                          onClick={() => setSelectedCompany(company)}
+                          onEdit={setEditingCompany}
+                          onDelete={setDeletingCompany}
+                          onAddToRoute={setAddingToRoute}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <Card className="overflow-hidden">
+                      <CompanyTable
+                        companies={section.items}
+                        onCompanyClick={setSelectedCompany}
+                        onEdit={setEditingCompany}
+                        onDelete={setDeletingCompany}
+                        onAddToRoute={setAddingToRoute}
+                        sortKey={sortKey}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                      />
+                    </Card>
+                  ))}
+                </section>
+              );
+            })}
           </div>
         ) : viewMode === "cards" ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -1692,7 +1963,7 @@ export function CompaniesView() {
         )}
 
         {/* paginação */}
-        {filtered.length > 0 && (
+        {filtered.length > 0 && !groupBy && (
           <div className="flex items-center justify-between pt-2">
             <span className="text-xs text-muted-foreground">
               {(safePage - 1) * perPage + 1}–{Math.min(safePage * perPage, filtered.length)} de {filtered.length}

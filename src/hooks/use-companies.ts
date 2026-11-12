@@ -28,7 +28,10 @@ export function useImportNotionCompanies() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: importFromNotion,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["companies"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["companies"] });
+      qc.invalidateQueries({ queryKey: ["company-groups"] });
+    },
   });
 }
 
@@ -51,7 +54,10 @@ export function useUpdateCompany() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: updateCompanyFetch,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["companies"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["companies"] });
+      qc.invalidateQueries({ queryKey: ["company-groups"] });
+    },
   });
 }
 
@@ -59,7 +65,10 @@ export function useDeleteCompany() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: deleteCompanyFetch,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["companies"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["companies"] });
+      qc.invalidateQueries({ queryKey: ["company-groups"] });
+    },
   });
 }
 
@@ -80,6 +89,9 @@ export function useCreateCompany() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: createCompanyFetch,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["companies"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["companies"] });
+      qc.invalidateQueries({ queryKey: ["company-groups"] });
+    },
   });
 }

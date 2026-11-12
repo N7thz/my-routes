@@ -16,6 +16,7 @@ export type CompanyRecord = {
   status: CompanyStatus | null;
   observations: string | null;
   notionId: string | null;
+  groupId: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -47,6 +48,7 @@ export type CompanyUpdateInput = {
   date?: string | null;
   status?: CompanyStatus | null;
   observations?: string | null;
+  groupId?: string | null;
 };
 
 export async function updateCompany(id: string, data: CompanyUpdateInput): Promise<CompanyRecord> {
@@ -58,6 +60,7 @@ export async function updateCompany(id: string, data: CompanyUpdateInput): Promi
       ...(data.address !== undefined && { address: data.address }),
       ...(data.status !== undefined && { status: data.status }),
       ...(data.observations !== undefined && { observations: data.observations }),
+      ...(data.groupId !== undefined && { groupId: data.groupId }),
       ...(data.date !== undefined && { date: data.date ? new Date(data.date) : null }),
     },
   });
@@ -74,6 +77,7 @@ export type CompanyCreateInput = {
   date?: string | null;
   status?: CompanyStatus | null;
   observations?: string | null;
+  groupId?: string | null;
 };
 
 export async function createCompany(data: CompanyCreateInput): Promise<CompanyRecord> {
@@ -84,6 +88,7 @@ export async function createCompany(data: CompanyCreateInput): Promise<CompanyRe
       address: data.address ?? null,
       status: data.status ?? null,
       observations: data.observations ?? null,
+      groupId: data.groupId ?? null,
       date: data.date ? new Date(data.date) : null,
     },
   });
