@@ -1,7 +1,7 @@
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getSessionUser } from "@/lib/session";
+import { getInitials } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,16 +23,9 @@ import {
   ZapIcon,
 } from "lucide-react";
 
-function getInitials(name?: string | null) {
-  if (!name) return "?";
-  return name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
-}
-
 function memberSince(date: Date | string) {
   return new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(new Date(date));
 }
-
-// ── Feature definitions ────────────────────────────────────────────────────────
 
 const FEATURES = [
   {
@@ -109,8 +102,6 @@ const FEATURES = [
   },
 ];
 
-// ── Connection check helper ────────────────────────────────────────────────────
-
 type ConnStatus = "connected" | "configured" | "missing";
 
 function ConnectionBadge({ status }: { status: ConnStatus }) {
@@ -133,13 +124,9 @@ function ConnectionBadge({ status }: { status: ConnStatus }) {
   );
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
-
 export default async function PerfilPage() {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session?.user) redirect("/login");
-
-  const user = session.user;
+  const user = await getSessionUser();
+  if (!user) redirect("/login");
 
   const [accounts, companyCount, routeCount, visitedToday] = await Promise.all([
     prisma.account.findMany({ where: { userId: user.id }, select: { providerId: true } }),
@@ -188,7 +175,6 @@ export default async function PerfilPage() {
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="mx-auto max-w-4xl space-y-6 p-6">
-        {/* ── User hero ───────────────────────────────────────────────────── */}
         <Card>
           <CardContent className="flex items-center gap-5 pt-6">
             <Avatar className="size-20 shrink-0 ring-2 ring-primary/20 ring-offset-2">
@@ -206,7 +192,6 @@ export default async function PerfilPage() {
           </CardContent>
         </Card>
 
-        {/* ── Stats ──────────────────────────────────────────────────────── */}
         <div className="grid grid-cols-3 gap-4">
           {[
             { icon: BuildingIcon, value: companyCount, label: "Empresas" },
@@ -224,7 +209,6 @@ export default async function PerfilPage() {
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
-          {/* ── Connections ─────────────────────────────────────────────── */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Conexões</CardTitle>
@@ -246,7 +230,6 @@ export default async function PerfilPage() {
             </CardContent>
           </Card>
 
-          {/* ── Feature progress ────────────────────────────────────────── */}
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">

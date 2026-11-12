@@ -1,7 +1,6 @@
 import "server-only";
-import { headers } from "next/headers";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getSessionUser } from "@/lib/session";
 
 // Escopos que permitem LER eventos (qualquer um serve). Inclui o antigo
 // readonly para não quebrar contas conectadas antes da migração para escrita.
@@ -16,9 +15,11 @@ const WRITE_SCOPES = [
   "https://www.googleapis.com/auth/calendar",
 ];
 
+export type GoogleUnavailableReason = "not-connected" | "no-calendar-scope" | "unauthenticated";
+
 type GoogleAccountResult =
   | { accessToken: string; hasCalendarScope: true; canWriteEvents: boolean }
-  | { accessToken: null; hasCalendarScope: false; reason: "not-connected" | "no-calendar-scope" | "unauthenticated" };
+  | { accessToken: null; hasCalendarScope: false; reason: GoogleUnavailableReason };
 
 async function refreshGoogleToken(
   accountId: string,
@@ -94,9 +95,7 @@ export async function getGoogleCalendarTokenForUser(
 }
 
 export async function getGoogleCalendarToken(): Promise<GoogleAccountResult> {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session?.user) {
-    return { accessToken: null, hasCalendarScope: false, reason: "unauthenticated" };
-  }
-  return getGoogleCalendarTokenForUser(session.user.id);
+  const user = await getSessionUser();
+  if (!user) return { accessToken: null, hasCalendarScope: false, reason: "unauthenticated" };
+  return getGoogleCalendarTokenForUser(user.id);
 }

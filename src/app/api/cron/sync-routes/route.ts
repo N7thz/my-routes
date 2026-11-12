@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isRunrunitConfigured } from "@/lib/runrunit-service";
-import { syncCalendarEventsToRoutes, syncRunrunitTasksToRoutes } from "@/lib/route-service";
+import { syncCalendarEventsToRoutes, syncRunrunitTasksToRoutes } from "@/lib/route-sync-service";
 
 // Roda a cada requisição (usa headers + banco); nunca cacheado.
 export const dynamic = "force-dynamic";

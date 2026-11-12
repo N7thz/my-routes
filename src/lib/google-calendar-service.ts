@@ -1,60 +1,36 @@
+type EventTime = { dateTime?: string; date?: string; timeZone?: string };
+
 export type CalendarEvent = {
   id: string;
   summary?: string;
-  start: { dateTime?: string; date?: string; timeZone?: string };
-  end: { dateTime?: string; date?: string; timeZone?: string };
+  start: EventTime;
+  end: EventTime;
   location?: string;
   description?: string;
   htmlLink: string;
   colorId?: string;
   status?: "confirmed" | "tentative" | "cancelled";
+  extendedProperties?: { private?: Record<string, string> };
 };
-
-type EventsResponse = {
-  items: CalendarEvent[];
-  nextPageToken?: string;
-};
-
-export async function listCalendarEvents(
-  accessToken: string,
-  options?: {
-    maxResults?: number;
-    calendarId?: string;
-    timeMin?: string;
-    timeMax?: string;
-  }
-): Promise<CalendarEvent[]> {
-  const calendarId = options?.calendarId ?? "primary";
-  const maxResults = options?.maxResults ?? 250;
-
-  const params = new URLSearchParams({
-    timeMin: options?.timeMin ?? new Date().toISOString(),
-    maxResults: String(maxResults),
-    orderBy: "startTime",
-    singleEvents: "true",
-  });
-
-  if (options?.timeMax) params.set("timeMax", options.timeMax);
-
-  const res = await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${params}`,
-    {
-      headers: { Authorization: `Bearer ${accessToken}` },
-      next: { revalidate: 0 },
-    }
-  );
-
-  if (!res.ok) throw new Error(`Google Calendar API error: ${res.status}`);
-
-  const data = (await res.json()) as EventsResponse;
-  return data.items ?? [];
-}
 
 /**
- * Chave usada para marcar (e depois reconhecer) um evento criado a partir de
- * uma tarefa do Runrunit — evita duplicar na próxima sincronização.
+ * Início do evento como veio da agenda. Tanto `date` quanto `dateTime` já
+ * trazem a data pretendida nos 10 primeiros caracteres (o `dateTime` vem com o
+ * offset do próprio evento), então fatiar dá o dia sem a conversão de fuso que
+ * `new Date()` faria.
  */
-export const RUNRUNIT_TASK_PROP = "runrunitTaskId";
+export function eventStart(event: Pick<CalendarEvent, "start">): string {
+  return event.start.dateTime ?? event.start.date ?? "";
+}
+
+export type NewCalendarEvent = {
+  summary: string;
+  description?: string;
+  location?: string;
+  start: EventTime;
+  end: EventTime;
+  runrunitTaskId: number;
+};
 
 /** Erro da API do Google Calendar com o status HTTP preservado. */
 export class CalendarApiError extends Error {
@@ -67,52 +43,61 @@ export class CalendarApiError extends Error {
   }
 }
 
-export type NewCalendarEvent = {
-  summary: string;
-  description?: string;
-  location?: string;
-  start: { dateTime?: string; date?: string; timeZone?: string };
-  end: { dateTime?: string; date?: string; timeZone?: string };
-  runrunitTaskId: number;
-};
+/**
+ * Chave usada para marcar (e depois reconhecer) um evento criado a partir de
+ * uma tarefa do Runrunit — evita duplicar na próxima sincronização.
+ */
+const RUNRUNIT_TASK_PROP = "runrunitTaskId";
+
+const EVENTS_URL = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
+
+async function calendarFetch<T>(accessToken: string, query: string, body?: unknown): Promise<T> {
+  const res = await fetch(`${EVENTS_URL}${query}`, {
+    method: body === undefined ? "GET" : "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      ...(body !== undefined && { "Content-Type": "application/json" }),
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+    next: { revalidate: 0 },
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new CalendarApiError(res.status, `Google Calendar API error: ${res.status} ${text}`);
+  }
+  return res.json();
+}
+
+export async function listCalendarEvents(
+  accessToken: string,
+  options?: { maxResults?: number; timeMin?: string; timeMax?: string }
+): Promise<CalendarEvent[]> {
+  const params = new URLSearchParams({
+    timeMin: options?.timeMin ?? new Date().toISOString(),
+    maxResults: String(options?.maxResults ?? 250),
+    orderBy: "startTime",
+    singleEvents: "true",
+  });
+  if (options?.timeMax) params.set("timeMax", options.timeMax);
+
+  const data = await calendarFetch<{ items?: CalendarEvent[] }>(accessToken, `?${params}`);
+  return data.items ?? [];
+}
 
 /**
- * Retorna os IDs de tarefas Runrunit que já possuem evento no calendário,
- * dentro da janela informada. Faz uma única chamada e lê o marcador gravado
- * em `extendedProperties.private.runrunitTaskId`.
+ * IDs de tarefas Runrunit que já têm evento na janela informada. A API não
+ * suporta wildcard em privateExtendedProperty, então lista os eventos da
+ * janela e lê o marcador de cada um.
  */
 export async function fetchSyncedTaskIds(
   accessToken: string,
-  options: { timeMin: string; timeMax: string; calendarId?: string }
+  range: { timeMin: string; timeMax: string }
 ): Promise<Set<number>> {
-  const calendarId = options.calendarId ?? "primary";
-  // A API não suporta wildcard em privateExtendedProperty, então listamos os
-  // eventos da janela e lemos o marcador de cada um (extendedProperties vêm
-  // no recurso do evento por padrão).
-  const params = new URLSearchParams({
-    timeMin: options.timeMin,
-    timeMax: options.timeMax,
-    maxResults: "2500",
-    singleEvents: "true",
-  });
-
-  const res = await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${params}`,
-    {
-      headers: { Authorization: `Bearer ${accessToken}` },
-      next: { revalidate: 0 },
-    }
-  );
-
-  if (!res.ok) throw new Error(`Google Calendar API error: ${res.status}`);
-
-  const data = (await res.json()) as {
-    items?: { extendedProperties?: { private?: Record<string, string> } }[];
-  };
-
+  const events = await listCalendarEvents(accessToken, { ...range, maxResults: 2500 });
   const ids = new Set<number>();
-  for (const item of data.items ?? []) {
-    const raw = item.extendedProperties?.private?.[RUNRUNIT_TASK_PROP];
+  for (const event of events) {
+    const raw = event.extendedProperties?.private?.[RUNRUNIT_TASK_PROP];
     if (raw) ids.add(Number(raw));
   }
   return ids;
@@ -120,33 +105,10 @@ export async function fetchSyncedTaskIds(
 
 export async function createCalendarEvent(
   accessToken: string,
-  input: NewCalendarEvent,
-  calendarId = "primary"
+  { runrunitTaskId, ...event }: NewCalendarEvent
 ): Promise<CalendarEvent> {
-  const { runrunitTaskId, ...rest } = input;
-  const body = {
-    ...rest,
-    extendedProperties: {
-      private: { [RUNRUNIT_TASK_PROP]: String(runrunitTaskId) },
-    },
-  };
-
-  const res = await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    }
-  );
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new CalendarApiError(res.status, `Google Calendar create error: ${res.status} ${text}`);
-  }
-
-  return res.json() as Promise<CalendarEvent>;
+  return calendarFetch<CalendarEvent>(accessToken, "", {
+    ...event,
+    extendedProperties: { private: { [RUNRUNIT_TASK_PROP]: String(runrunitTaskId) } },
+  });
 }

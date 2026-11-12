@@ -30,13 +30,6 @@ const STATUS_MAP: Record<string, CompanyStatus> = {
   Revisão: "REVISAO",
 };
 
-export const STATUS_LABEL: Record<CompanyStatus, string> = {
-  PENDENTE: "Pendente",
-  EM_ANDAMENTO: "Em Andamento",
-  CONCLUIDO: "Concluído",
-  REVISAO: "Revisão",
-};
-
 export async function listCompanies(): Promise<CompanyRecord[]> {
   return prisma.company.findMany({ orderBy: { name: "asc" } });
 }

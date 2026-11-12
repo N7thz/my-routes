@@ -8,16 +8,26 @@ import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import type { DatesSetArg, EventClickArg } from "@fullcalendar/core";
 import type FullCalendarType from "@fullcalendar/react";
-import type { CalendarEvent } from "@/lib/google-calendar-service";
-import type { RunrunitTask } from "@/lib/runrunit-service";
+import { eventStart, type CalendarEvent } from "@/lib/google-calendar-service";
+import {
+  OVERDUE_BADGE,
+  taskColor,
+  formatEstimate,
+  runrunitTaskUrl,
+  taskBestDate,
+  taskCalendarDate,
+  taskTimeRange,
+  type RunrunitTask,
+} from "@/lib/runrunit";
+import { currentMonthKey, formatDate } from "@/lib/dates";
+import { ApiError } from "@/lib/api-client";
 import type { CompanyRecord } from "@/lib/company-service";
 import type { CalendarDateRange } from "@/hooks/use-google-calendar";
-import { RunrunitTaskSheet, type RunrunitTaskDetails } from "@/components/runrunit-task-sheet";
+import { RunrunitTaskSheet } from "@/components/runrunit-task-sheet";
 import { useGoogleCalendar } from "@/hooks/use-google-calendar";
-import { useRunrunitTasks } from "@/hooks/use-runrunit-tasks";
-import { useRunrunitList } from "@/hooks/use-runrunit-list";
+import { useRunrunitList, useRunrunitTasks } from "@/hooks/use-runrunit-tasks";
 import { useCompanies } from "@/hooks/use-companies";
-import { useSyncTasksToCalendar, SyncTasksError } from "@/hooks/use-sync-tasks-to-calendar";
+import { useSyncTasksToCalendar } from "@/hooks/use-sync-tasks-to-calendar";
 import { signIn } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,19 +47,13 @@ import {
   Loader2Icon,
 } from "lucide-react";
 
-const OVERDUE_COLORS: Record<string, string> = {
-  on_schedule: "#10b981",
-  soft_overdue: "#f97316",
-  hard_overdue: "#ef4444",
-};
-
 const COMPANY_COLOR = "#8b5cf6";
 
 function toGoogleFCEvent(event: CalendarEvent) {
   return {
     id: `gc-${event.id}`,
     title: event.summary ?? "Sem título",
-    start: event.start.dateTime ?? event.start.date ?? "",
+    start: eventStart(event),
     end: event.end.dateTime ?? event.end.date ?? "",
     allDay: !event.start.dateTime,
     url: event.htmlLink,
@@ -58,52 +62,26 @@ function toGoogleFCEvent(event: CalendarEvent) {
 }
 
 function toRunrunitFCEvent(task: RunrunitTask) {
-  const taskUrl = `https://secure.runrun.it/tasks/${task.id}`;
-  const hasTimeRange = task.is_scheduled && task.scheduled_start_time && task.gantt_bar_end_date;
-  const start = hasTimeRange
-    ? task.scheduled_start_time!
-    : (task.desired_date ?? task.gantt_bar_start_date ?? task.close_date ?? task.estimated_delivery_date ?? "");
-  const end = hasTimeRange ? task.gantt_bar_end_date! : undefined;
-
+  const range = taskTimeRange(task);
+  const start = range?.start ?? taskCalendarDate(task);
   if (!start) return null;
 
-  const overdueColor = OVERDUE_COLORS[task.overdue ?? "on_schedule"];
-  const color = task.is_closed ? "#6b7280" : task.is_urgent ? "#ef4444" : overdueColor;
-  const displayTitle =
-    task.is_subtask && task.parent_task_title
-      ? `${task.parent_task_title} · ${task.title}`
-      : task.title;
+  const color = taskColor(task);
 
   return {
     id: `rr-${task.id}`,
-    title: displayTitle,
+    title:
+      task.is_subtask && task.parent_task_title
+        ? `${task.parent_task_title} · ${task.title}`
+        : task.title,
     start,
-    ...(end ? { end } : {}),
-    allDay: !hasTimeRange,
-    url: taskUrl,
+    ...(range && { end: range.end }),
+    allDay: !range,
+    url: runrunitTaskUrl(task.id),
     backgroundColor: color,
     borderColor: color,
     classNames: task.is_closed ? ["rr-event-closed"] : [],
-    extendedProps: {
-      source: "runrunit" as const,
-      id: task.id,
-      project: task.project_name,
-      client: task.client_name,
-      board: task.board_name,
-      stage: task.board_stage_name,
-      overdue: task.overdue,
-      isUrgent: task.is_urgent,
-      isClosed: task.is_closed,
-      responsible: task.responsible_name,
-      typeName: task.type_name,
-      desiredDate: task.desired_date,
-      scheduledStart: task.scheduled_start_time,
-      ganttEnd: task.gantt_bar_end_date,
-      estimateSeconds: task.current_estimate_seconds,
-      taskTitle: task.title,
-      parentTitle: task.parent_task_title,
-      url: taskUrl,
-    },
+    extendedProps: { source: "runrunit" as const, task },
   };
 }
 
@@ -128,64 +106,6 @@ function toCompanyFCEvent(company: CompanyRecord) {
   };
 }
 
-function taskBestDate(t: RunrunitTask): string | null {
-  return (
-    t.close_date ??
-    t.desired_date ??
-    t.gantt_bar_start_date ??
-    t.estimated_delivery_date ??
-    null
-  );
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso + (iso.length === 10 ? "T12:00:00" : "")).toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
-
-function formatEstimate(seconds?: number): string | null {
-  if (!seconds) return null;
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  if (h === 0) return `${m}min`;
-  return m > 0 ? `${h}h ${m}min` : `${h}h`;
-}
-
-function taskToDetails(task: RunrunitTask): RunrunitTaskDetails {
-  return {
-    id: task.id,
-    title: task.title,
-    source: "runrunit",
-    project: task.project_name,
-    client: task.client_name,
-    board: task.board_name,
-    stage: task.board_stage_name,
-    overdue: task.overdue,
-    isUrgent: task.is_urgent,
-    isClosed: task.is_closed,
-    responsible: task.responsible_name,
-    typeName: task.type_name,
-    desiredDate: task.desired_date,
-    scheduledStart: task.scheduled_start_time,
-    ganttEnd: task.gantt_bar_end_date,
-    estimateSeconds: task.current_estimate_seconds,
-    parentTitle: task.parent_task_title,
-    url: `https://secure.runrun.it/tasks/${task.id}`,
-  };
-}
-
-const OVERDUE_BADGE: Record<
-  string,
-  { label: string; variant: "destructive" | "secondary" | "outline" }
-> = {
-  hard_overdue: { label: "Atrasado", variant: "destructive" },
-  soft_overdue: { label: "Prazo próximo", variant: "secondary" },
-  on_schedule: { label: "No prazo", variant: "outline" },
-};
-
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
 function RunrunitListView({
@@ -197,7 +117,7 @@ function RunrunitListView({
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
 
-  const sorted = !Array.isArray(data)
+  const sorted: RunrunitTask[] = !Array.isArray(data)
     ? []
     : [...data].sort((a, b) => {
         const da = taskBestDate(a);
@@ -241,7 +161,6 @@ function RunrunitListView({
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
-      {/* controles de paginação — topo */}
       <div className="flex items-center justify-between gap-3 px-4 py-2 border-b shrink-0">
         <span className="text-xs text-muted-foreground">
           {start}–{end} de {sorted.length} tarefas
@@ -266,7 +185,6 @@ function RunrunitListView({
         </div>
       </div>
 
-      {/* lista */}
       <div className="flex-1 overflow-y-auto">
         {paginated.map((task) => {
           const date = taskBestDate(task);
@@ -282,11 +200,7 @@ function RunrunitListView({
               <div
                 className="mt-1.5 size-2.5 rounded-full shrink-0"
                 style={{
-                  backgroundColor: task.is_closed
-                    ? "#6b7280"
-                    : task.is_urgent
-                    ? "#ef4444"
-                    : OVERDUE_COLORS[task.overdue ?? "on_schedule"],
+                  backgroundColor: taskColor(task),
                 }}
               />
               <div className="flex flex-col gap-1 min-w-0 flex-1">
@@ -337,7 +251,6 @@ function RunrunitListView({
         })}
       </div>
 
-      {/* paginação — rodapé */}
       <div className="flex items-center justify-center gap-2 px-4 py-2 border-t shrink-0">
         <Button
           variant="ghost"
@@ -466,7 +379,7 @@ export function GoogleCalendarView() {
   const [viewMode, setViewMode] = useState<ViewMode>("calendar");
   const calendarRef = useRef<FullCalendarType>(null);
   const [range, setRange] = useState<CalendarDateRange | undefined>();
-  const [selectedTask, setSelectedTask] = useState<RunrunitTaskDetails | null>(null);
+  const [selectedTask, setSelectedTask] = useState<RunrunitTask | null>(null);
   const [activeSources, setActiveSources] = useQueryState(
     "fontes",
     parseAsArrayOf(parseAsStringLiteral(SOURCE_KEYS))
@@ -513,14 +426,13 @@ export function GoogleCalendarView() {
         });
       },
       onError: (e) => {
-        const scopeIssue =
-          e instanceof SyncTasksError &&
-          (e.reason === "no-write-scope" || e.reason === "no-calendar-scope");
+        const reason = e instanceof ApiError ? e.reason : undefined;
+        const scopeIssue = reason === "no-write-scope" || reason === "no-calendar-scope";
         const text =
-          e instanceof SyncTasksError
+          reason
             ? scopeIssue
               ? "Reconecte o Google para permitir escrita na agenda"
-              : e.reason === "not-connected" || e.reason === "unauthenticated"
+              : reason === "not-connected" || reason === "unauthenticated"
                 ? "Conecte sua conta Google primeiro"
                 : "Runrunit não configurado"
             : "Falha ao sincronizar";
@@ -539,22 +451,13 @@ export function GoogleCalendarView() {
   const handleEventClick = (arg: EventClickArg) => {
     arg.jsEvent.preventDefault();
     if (arg.event.extendedProps.source === "runrunit") {
-      setSelectedTask({
-        ...arg.event.extendedProps,
-        title: arg.event.extendedProps.taskTitle as string,
-      } as RunrunitTaskDetails);
+      setSelectedTask(arg.event.extendedProps.task as RunrunitTask);
     } else if (arg.event.url) {
       window.open(arg.event.url, "_blank", "noopener,noreferrer");
     }
   };
 
-  const handleTaskClick = (task: RunrunitTask) => {
-    setSelectedTask(taskToDetails(task));
-  };
-
-  const now = new Date();
-  const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const initialDate = month && month >= currentKey ? `${month}-01` : undefined;
+  const initialDate = month && month >= currentMonthKey() ? `${month}-01` : undefined;
 
   const googleEvents = Array.isArray(googleData) ? googleData.map(toGoogleFCEvent) : [];
   const runrunitEvents = Array.isArray(runrunitData)
@@ -573,7 +476,7 @@ export function GoogleCalendarView() {
   if (!range && googleLoading) return <CalendarSkeleton />;
 
   if (!googleLoading && googleData && !Array.isArray(googleData)) {
-    return <ConnectGoogleCard reason={(googleData as { reason?: string }).reason} />;
+    return <ConnectGoogleCard reason={googleData.reason} />;
   }
 
   const isFetching = googleLoading || runrunitFetching || companiesFetching;
@@ -672,7 +575,7 @@ export function GoogleCalendarView() {
         </div>
 
         {viewMode === "list" ? (
-          <RunrunitListView onTaskClick={handleTaskClick} />
+          <RunrunitListView onTaskClick={setSelectedTask} />
         ) : (
           <CardContent className="p-0 fc-wrapper flex-1 flex flex-col">
             <FullCalendar

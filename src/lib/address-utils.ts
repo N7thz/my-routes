@@ -1,6 +1,3 @@
-const STREET_PREFIX =
-  /\b(Rua|R\.|Avenida|Av\.|Travessa|Trav\.|Alameda|Al\.|Praça|Pça\.|Rodovia|Rod\.|Estrada|Est\.|Largo|Lgo\.|Beco|Viela)\b/i;
-
 const CEP = /\b\d{5}-?\d{3}\b/;
 
 function stripHtml(html: string): string {
@@ -23,7 +20,6 @@ function stripHtml(html: string): string {
 export function extractAddress(html: string): string | null {
   const text = stripHtml(html);
 
-  // Encontra todas as ocorrências de prefixo de logradouro
   const prefixRegex =
     /\b(Rua|R\.|Avenida|Av\.|Travessa|Trav\.|Alameda|Al\.|Praça|Pça\.|Rodovia|Rod\.|Estrada|Est\.|Largo|Lgo\.|Beco|Viela)\s+.{5,200}/gi;
 
@@ -36,11 +32,9 @@ export function extractAddress(html: string): string | null {
       .replace(/[.!?]\s+[A-Z].*$/, "")
       .trim();
 
-    // Prefere candidatos com CEP (mais confiáveis)
     if (CEP.test(candidate)) return candidate;
   }
 
-  // Se nenhum tinha CEP, retorna o primeiro match encurtado
   const first = matches[0][0].replace(/[.!?]\s+[A-Z].*$/, "").trim();
   // Só retorna se parece mesmo um endereço (tem número ou complemento)
   if (/\d/.test(first)) return first;

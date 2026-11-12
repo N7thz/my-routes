@@ -8,7 +8,6 @@ type Stop = { address: string; visitedAt: Date | string | null; lat?: number | n
 type LatLng = { lat: number; lng: number };
 type UserPos = { lat: number; lng: number; accuracy: number };
 
-// ── Geocode via Nominatim (OpenStreetMap, free, no key) ───────────────────────
 // As chamadas são serializadas (≥1,1s entre elas) para respeitar o rate-limit do
 // Nominatim (1 req/s); disparar em paralelo causava 429 e mapa vazio.
 
@@ -44,8 +43,6 @@ async function geocode(address: string): Promise<LatLng | null> {
   return run;
 }
 
-// ── OSRM route (free, no key) ─────────────────────────────────────────────────
-
 async function fetchOsrmRoute(points: LatLng[]): Promise<[number, number][] | null> {
   if (points.length < 2) return null;
   const coords = points.map((p) => `${p.lng},${p.lat}`).join(";");
@@ -60,8 +57,6 @@ async function fetchOsrmRoute(points: LatLng[]): Promise<[number, number][] | nu
   }
 }
 
-// ── Fallback ──────────────────────────────────────────────────────────────────
-
 function NoDataFallback({ stops }: { stops: Stop[] }) {
   const url = `https://www.google.com/maps/dir/${stops.map((s) => encodeURIComponent(s.address)).join("/")}`;
   return (
@@ -74,8 +69,6 @@ function NoDataFallback({ stops }: { stops: Stop[] }) {
     </div>
   );
 }
-
-// ── Marker helpers ────────────────────────────────────────────────────────────
 
 const STOP_COLORS = { visited: "#10b981", current: "#6366f1", pending: "#71717a" };
 
@@ -112,8 +105,6 @@ function userIconHtml(imageUrl?: string | null) {
   </div>`;
 }
 
-// ── Main component ─────────────────────────────────────────────────────────────
-
 export function RouteMap({ stops, dark, userImage }: { stops: Stop[]; dark?: boolean; userImage?: string | null }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<import("leaflet").Map | null>(null);
@@ -129,7 +120,6 @@ export function RouteMap({ stops, dark, userImage }: { stops: Stop[]; dark?: boo
   const prevStopsKeyRef = useRef("");
   const prevDarkRef = useRef<boolean | undefined>(undefined);
 
-  // ── Watch user geolocation ─────────────────────────────────────────────────
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
 
@@ -143,7 +133,6 @@ export function RouteMap({ stops, dark, userImage }: { stops: Stop[]; dark?: boo
     return () => navigator.geolocation.clearWatch(id);
   }, []);
 
-  // ── Update user marker when position changes ───────────────────────────────
   useEffect(() => {
     const L = LRef.current;
     const map = mapRef.current;
@@ -175,7 +164,6 @@ export function RouteMap({ stops, dark, userImage }: { stops: Stop[]; dark?: boo
     if (following) map.panTo(latlng, { animate: true, duration: 0.5 });
   }, [userPos, following, userImage]);
 
-  // ── Initialise map + draw route when stops or dark mode changes ────────────
   useEffect(() => {
     if (!containerRef.current || stops.length === 0) return;
 
@@ -206,13 +194,11 @@ export function RouteMap({ stops, dark, userImage }: { stops: Stop[]; dark?: boo
 
       if (cancelled) return;
 
-      // Create or reuse map
       if (!mapRef.current) {
         mapRef.current = L.map(containerRef.current!, { zoomControl: true });
       }
       const map = mapRef.current;
 
-      // Update tile layer on dark mode change
       map.eachLayer((l) => { if ((l as { _url?: string })._url) map.removeLayer(l); });
       L.tileLayer(
         dark
@@ -225,7 +211,6 @@ export function RouteMap({ stops, dark, userImage }: { stops: Stop[]; dark?: boo
         }
       ).addTo(map);
 
-      // Remove previous route layers (keep user marker)
       routeLayersRef.current.forEach((l) => map.removeLayer(l));
       routeLayersRef.current = [];
 
@@ -242,7 +227,6 @@ export function RouteMap({ stops, dark, userImage }: { stops: Stop[]; dark?: boo
       const validPoints = points.filter(Boolean) as LatLng[];
       if (validPoints.length === 0) { setMapState("error"); return; }
 
-      // Draw route polyline via OSRM
       if (validPoints.length >= 2) {
         const routeCoords = await fetchOsrmRoute(validPoints);
         if (!cancelled && routeCoords) {
@@ -251,7 +235,6 @@ export function RouteMap({ stops, dark, userImage }: { stops: Stop[]; dark?: boo
         }
       }
 
-      // Stop markers
       const firstUnvisited = stops.findIndex((s) => !s.visitedAt);
       validPoints.forEach((pt, i) => {
         if (!pt) return;
@@ -279,7 +262,6 @@ export function RouteMap({ stops, dark, userImage }: { stops: Stop[]; dark?: boo
         routeLayersRef.current.push(marker);
       });
 
-      // Fit bounds to route
       const bounds = L.latLngBounds(validPoints.map((p) => [p.lat, p.lng]));
       map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
 
@@ -290,7 +272,6 @@ export function RouteMap({ stops, dark, userImage }: { stops: Stop[]; dark?: boo
     return () => { cancelled = true; };
   }, [stops, dark]);
 
-  // ── Cleanup on unmount ─────────────────────────────────────────────────────
   useEffect(() => {
     return () => {
       if (mapRef.current) {
@@ -322,7 +303,6 @@ export function RouteMap({ stops, dark, userImage }: { stops: Stop[]; dark?: boo
     <div className="relative h-full w-full">
       <div ref={containerRef} className="h-full w-full" />
 
-      {/* Loading overlay */}
       {mapState === "loading" && (
         <div className="absolute inset-0 flex items-center justify-center bg-background/60 backdrop-blur-sm z-[1001]">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -334,10 +314,8 @@ export function RouteMap({ stops, dark, userImage }: { stops: Stop[]; dark?: boo
 
       {mapState === "error" && <NoDataFallback stops={stops} />}
 
-      {/* Map controls overlay */}
       {mapState === "idle" && (
         <div className="absolute bottom-5 right-3 z-[1001] flex flex-col gap-2">
-          {/* Fit route */}
           <Button
             size="icon"
             variant="secondary"
@@ -348,7 +326,6 @@ export function RouteMap({ stops, dark, userImage }: { stops: Stop[]; dark?: boo
             <MapPinIcon className="size-4" />
           </Button>
 
-          {/* Center on user */}
           {userPos && (
             <Button
               size="icon"

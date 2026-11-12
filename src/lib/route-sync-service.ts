@@ -1,0 +1,321 @@
+import "server-only";
+import { prisma } from "@/lib/prisma";
+import { dayRange, todayKey } from "@/lib/dates";
+import { listRunrunitTasks } from "@/lib/runrunit-service";
+import { getGoogleCalendarTokenForUser, type GoogleUnavailableReason } from "@/lib/google-auth";
+import { eventStart, listCalendarEvents, type CalendarEvent } from "@/lib/google-calendar-service";
+import {
+  companiesOnDay,
+  dayRouteName,
+  stopFromCompany,
+  type DayCompany,
+} from "@/lib/route-service";
+
+// As sincronizações recebem `userId` explícito porque também rodam sem sessão
+// (cron da Vercel).
+
+/** Fuso da operação — as rotas são planejadas em horário local, não no do servidor. */
+const APP_TIME_ZONE = "America/Sao_Paulo";
+
+/** A rota do usuário naquele dia, criada (vazia) se ainda não existir. */
+async function findOrCreateDayRoute(userId: string, day: string, nameDetail?: string) {
+  const { start, end } = dayRange(day);
+  const existing = await prisma.route.findFirst({
+    where: { userId, date: { gte: start, lt: end } },
+    include: { stops: true },
+  });
+  if (existing) return { route: existing, created: false };
+
+  const route = await prisma.route.create({
+    data: { userId, name: dayRouteName(day, nameDetail), date: start },
+    include: { stops: true },
+  });
+  return { route, created: true };
+}
+
+function nextStopOrder(stops: { order: number }[]): number {
+  return stops.reduce((max, s) => Math.max(max, s.order), -1) + 1;
+}
+
+export type RouteSyncResult = {
+  tasksConsidered: number;
+  daysWithTasks: number;
+  routesCreated: number;
+  stopsAdded: number;
+  days: string[];
+};
+
+/**
+ * Cada dia com tarefa futura do Runrunit vira uma rota (criada se ainda não
+ * existe), e as paradas são as empresas agendadas para esse mesmo dia
+ * (`Company.date`) — o `client_name` da tarefa (cidade) serve apenas para
+ * nomear a rota nova.
+ *
+ * É idempotente: dedup por empresa dentro da rota do dia.
+ */
+export async function syncRunrunitTasksToRoutes(userId: string): Promise<RouteSyncResult> {
+  const tasks = await listRunrunitTasks();
+  const today = todayKey(APP_TIME_ZONE);
+
+  const dayCities = new Map<string, Set<string>>();
+  let tasksConsidered = 0;
+  for (const task of tasks) {
+    const day = task.desired_date?.slice(0, 10);
+    if (task.is_closed || !day || day < today) continue;
+    tasksConsidered++;
+    const cities = dayCities.get(day) ?? new Set<string>();
+    if (task.client_name) cities.add(task.client_name);
+    dayCities.set(day, cities);
+  }
+
+  const result: RouteSyncResult = {
+    tasksConsidered,
+    daysWithTasks: dayCities.size,
+    routesCreated: 0,
+    stopsAdded: 0,
+    days: [],
+  };
+
+  for (const [day, cities] of dayCities) {
+    const companies = await companiesOnDay(day);
+    if (companies.length === 0) continue;
+
+    const { route, created } = await findOrCreateDayRoute(userId, day, [...cities].join(", "));
+    if (created) result.routesCreated++;
+    result.days.push(day);
+
+    const existing = new Set(route.stops.map((s) => s.companyId));
+    const toAdd = companies.filter((c) => !existing.has(c.id));
+    if (toAdd.length === 0) continue;
+
+    const firstOrder = nextStopOrder(route.stops);
+    await prisma.stop.createMany({
+      data: toAdd.map((company, i) => ({
+        routeId: route.id,
+        ...stopFromCompany(company),
+        order: firstOrder + i,
+      })),
+    });
+    result.stopsAdded += toAdd.length;
+  }
+
+  return result;
+}
+
+/** Janela olhada na agenda, a partir de hoje. */
+const CALENDAR_DAYS_AHEAD = 30;
+/** Teto de eventos por sincronização; se bater, a resposta pode estar truncada. */
+const CALENDAR_MAX_EVENTS = 2500;
+
+export type CalendarRouteSyncResult = {
+  eventsConsidered: number;
+  daysWithEvents: number;
+  routesCreated: number;
+  stopsAdded: number;
+  stopsUpdated: number;
+  stopsRemoved: number;
+  days: string[];
+};
+
+export type CalendarRouteSyncOutcome =
+  | ({ ok: true } & CalendarRouteSyncResult)
+  | { ok: false; reason: GoogleUnavailableReason };
+
+type StopCandidate = {
+  calendarEventId: string | null;
+  companyId: string | null;
+  label: string;
+  address: string;
+  lat: number | null;
+  lng: number | null;
+};
+
+function normalizeText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+/**
+ * Casa o evento com uma das empresas agendadas para o dia comparando o nome
+ * normalizado da empresa com o texto do evento (título + local). Nomes curtos
+ * são ignorados para não gerar falso positivo; vence o nome mais longo.
+ */
+function matchCompany(event: CalendarEvent, companies: DayCompany[]): DayCompany | null {
+  const haystack = normalizeText(`${event.summary ?? ""} ${event.location ?? ""}`);
+  if (!haystack) return null;
+
+  let best: DayCompany | null = null;
+  let bestLength = 0;
+  for (const company of companies) {
+    const needle = normalizeText(company.name);
+    if (needle.length < 4 || needle.length <= bestLength || !haystack.includes(needle)) continue;
+    best = company;
+    bestLength = needle.length;
+  }
+  return best;
+}
+
+/**
+ * Paradas que o dia deveria ter: um item por evento com destino conhecido (na
+ * ordem do horário), seguido das empresas agendadas para o dia que nenhum
+ * evento citou — assim a agenda manda na ordem sem perder o que veio do Notion.
+ */
+function buildCandidates(events: CalendarEvent[], companies: DayCompany[]): StopCandidate[] {
+  const candidates: StopCandidate[] = [];
+  const usedCompanies = new Set<string>();
+
+  for (const event of events) {
+    const company = matchCompany(event, companies);
+    if (company && usedCompanies.has(company.id)) continue;
+
+    const address = company?.address?.trim() || event.location?.trim() || "";
+    // Sem empresa e sem local não há para onde ir — o evento fica fora da rota.
+    if (!address) continue;
+
+    if (company) usedCompanies.add(company.id);
+    candidates.push({
+      calendarEventId: event.id,
+      companyId: company?.id ?? null,
+      label: event.summary?.trim() || company?.name || "Evento sem título",
+      address,
+      lat: company?.lat ?? null,
+      lng: company?.lng ?? null,
+    });
+  }
+
+  for (const company of companies) {
+    if (usedCompanies.has(company.id) || !company.address?.trim()) continue;
+    candidates.push({
+      calendarEventId: null,
+      ...stopFromCompany(company),
+      address: company.address.trim(),
+    });
+  }
+
+  return candidates;
+}
+
+/**
+ * Reflete os eventos do Google Agenda nas rotas dos próximos dias: cada dia com
+ * evento vira uma rota (criada se não existir) e cada evento com destino vira
+ * uma parada, casada com a empresa agendada para o dia quando o nome bate.
+ *
+ * Idempotente: a parada guarda o `calendarEventId`, então ressincronizar
+ * atualiza em vez de duplicar. Paradas vindas da agenda que sumiram dela são
+ * removidas — mas nunca as já visitadas nem as de outra origem (Runrunit,
+ * manuais), que não têm `calendarEventId`.
+ */
+export async function syncCalendarEventsToRoutes(
+  userId: string
+): Promise<CalendarRouteSyncOutcome> {
+  const token = await getGoogleCalendarTokenForUser(userId);
+  if (!token.hasCalendarScope) return { ok: false, reason: token.reason };
+
+  const today = todayKey(APP_TIME_ZONE);
+  const from = dayRange(today).start;
+  const until = new Date(from);
+  until.setUTCDate(until.getUTCDate() + CALENDAR_DAYS_AHEAD);
+
+  const events = await listCalendarEvents(token.accessToken, {
+    timeMin: from.toISOString(),
+    timeMax: until.toISOString(),
+    maxResults: CALENDAR_MAX_EVENTS,
+  });
+
+  // Resposta possivelmente truncada: um evento ausente aqui não prova que ele
+  // saiu da agenda, então não removemos nada nessa rodada.
+  const truncated = events.length >= CALENDAR_MAX_EVENTS;
+
+  const byDay = new Map<string, CalendarEvent[]>();
+  for (const event of events) {
+    if (event.status === "cancelled") continue;
+    const day = eventStart(event).slice(0, 10);
+    // `timeMin` em UTC pega algumas horas da noite anterior no fuso local.
+    if (!day || day < today) continue;
+    const list = byDay.get(day) ?? [];
+    list.push(event);
+    byDay.set(day, list);
+  }
+
+  const result: CalendarRouteSyncResult = {
+    eventsConsidered: 0,
+    daysWithEvents: byDay.size,
+    routesCreated: 0,
+    stopsAdded: 0,
+    stopsUpdated: 0,
+    stopsRemoved: 0,
+    days: [],
+  };
+
+  for (const day of [...byDay.keys()].sort()) {
+    const dayEvents = byDay.get(day)!.sort((a, b) => eventStart(a).localeCompare(eventStart(b)));
+    result.eventsConsidered += dayEvents.length;
+
+    const candidates = buildCandidates(dayEvents, await companiesOnDay(day));
+    if (candidates.length === 0) continue;
+
+    const { route, created } = await findOrCreateDayRoute(userId, day);
+    if (created) result.routesCreated++;
+    result.days.push(day);
+
+    const byEvent = new Map(
+      route.stops.flatMap((s) => (s.calendarEventId ? [[s.calendarEventId, s] as const] : []))
+    );
+    const byCompany = new Map(
+      route.stops.flatMap((s) => (s.companyId ? [[s.companyId, s] as const] : []))
+    );
+    let nextOrder = nextStopOrder(route.stops);
+    const keptStopIds = new Set<string>();
+
+    for (const candidate of candidates) {
+      // Uma parada da rodada anterior (pelo evento) ou uma parada de outra
+      // origem para a mesma empresa — nesse caso adotamos o evento nela.
+      const existing =
+        (candidate.calendarEventId ? byEvent.get(candidate.calendarEventId) : undefined) ??
+        (candidate.companyId ? byCompany.get(candidate.companyId) : undefined);
+
+      if (!existing) {
+        const created = await prisma.stop.create({
+          data: { routeId: route.id, ...candidate, order: nextOrder++ },
+        });
+        keptStopIds.add(created.id);
+        result.stopsAdded++;
+        continue;
+      }
+
+      keptStopIds.add(existing.id);
+      // Nunca apagamos o que já estava preenchido: a agenda só acrescenta.
+      const next = {
+        calendarEventId: candidate.calendarEventId ?? existing.calendarEventId,
+        companyId: candidate.companyId ?? existing.companyId,
+        label: candidate.label,
+        address: candidate.address,
+        lat: candidate.lat ?? existing.lat,
+        lng: candidate.lng ?? existing.lng,
+      };
+      const changed = (Object.keys(next) as (keyof typeof next)[]).some(
+        (key) => next[key] !== existing[key]
+      );
+      if (changed) {
+        await prisma.stop.update({ where: { id: existing.id }, data: next });
+        result.stopsUpdated++;
+      }
+    }
+
+    if (!truncated) {
+      const stale = route.stops.filter(
+        (s) => s.calendarEventId && !keptStopIds.has(s.id) && !s.visitedAt
+      );
+      if (stale.length > 0) {
+        await prisma.stop.deleteMany({ where: { id: { in: stale.map((s) => s.id) } } });
+        result.stopsRemoved += stale.length;
+      }
+    }
+  }
+
+  return { ok: true, ...result };
+}

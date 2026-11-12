@@ -1,97 +1,53 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CompanyRecord, ImportResult, CompanyUpdateInput, CompanyCreateInput } from "@/lib/company-service";
+import { api } from "@/lib/api-client";
+import type { CompanyRecord, CompanyUpdateInput, CompanyCreateInput } from "@/lib/company-service";
 
-async function fetchCompanies(): Promise<CompanyRecord[]> {
-  const res = await fetch("/api/companies");
-  if (!res.ok) throw new Error("Falha ao carregar empresas");
-  return res.json();
-}
+const COMPANIES_KEY = ["companies"] as const;
+export const COMPANY_GROUPS_KEY = ["company-groups"] as const;
 
-async function importFromNotion(): Promise<ImportResult> {
-  const res = await fetch("/api/companies/import/notion", { method: "POST" });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error((body as { error?: string }).error ?? "Falha na importação");
-  }
-  return res.json();
+/**
+ * Empresas e grupos mudam juntos: a empresa carrega o `groupId` e o grupo, a
+ * contagem de empresas. Toda mutação de um invalida os dois.
+ */
+export function useInvalidateCompanies() {
+  const qc = useQueryClient();
+  return () => {
+    qc.invalidateQueries({ queryKey: COMPANIES_KEY });
+    qc.invalidateQueries({ queryKey: COMPANY_GROUPS_KEY });
+  };
 }
 
 export function useCompanies() {
-  return useQuery<CompanyRecord[]>({
-    queryKey: ["companies"],
-    queryFn: fetchCompanies,
+  return useQuery({
+    queryKey: COMPANIES_KEY,
+    queryFn: () => api<CompanyRecord[]>("/api/companies", "Falha ao carregar empresas"),
     staleTime: 5 * 60 * 1000,
   });
 }
 
-export function useImportNotionCompanies() {
-  const qc = useQueryClient();
+export function useCreateCompany() {
   return useMutation({
-    mutationFn: importFromNotion,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["companies"] });
-      qc.invalidateQueries({ queryKey: ["company-groups"] });
-    },
+    mutationFn: (data: CompanyCreateInput) =>
+      api<CompanyRecord>("/api/companies", "Falha ao criar empresa", { method: "POST", body: data }),
+    onSuccess: useInvalidateCompanies(),
   });
-}
-
-async function updateCompanyFetch({ id, data }: { id: string; data: CompanyUpdateInput }): Promise<CompanyRecord> {
-  const res = await fetch(`/api/companies/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) throw new Error("Falha ao atualizar empresa");
-  return res.json();
-}
-
-async function deleteCompanyFetch(id: string): Promise<void> {
-  const res = await fetch(`/api/companies/${id}`, { method: "DELETE" });
-  if (!res.ok) throw new Error("Falha ao excluir empresa");
 }
 
 export function useUpdateCompany() {
-  const qc = useQueryClient();
   return useMutation({
-    mutationFn: updateCompanyFetch,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["companies"] });
-      qc.invalidateQueries({ queryKey: ["company-groups"] });
-    },
+    mutationFn: ({ id, data }: { id: string; data: CompanyUpdateInput }) =>
+      api<CompanyRecord>(`/api/companies/${id}`, "Falha ao atualizar empresa", {
+        method: "PUT",
+        body: data,
+      }),
+    onSuccess: useInvalidateCompanies(),
   });
 }
 
 export function useDeleteCompany() {
-  const qc = useQueryClient();
   return useMutation({
-    mutationFn: deleteCompanyFetch,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["companies"] });
-      qc.invalidateQueries({ queryKey: ["company-groups"] });
-    },
-  });
-}
-
-async function createCompanyFetch(data: CompanyCreateInput): Promise<CompanyRecord> {
-  const res = await fetch("/api/companies", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error((body as { error?: string }).error ?? "Falha ao criar empresa");
-  }
-  return res.json();
-}
-
-export function useCreateCompany() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: createCompanyFetch,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["companies"] });
-      qc.invalidateQueries({ queryKey: ["company-groups"] });
-    },
+    mutationFn: (id: string) =>
+      api(`/api/companies/${id}`, "Falha ao excluir empresa", { method: "DELETE" }),
+    onSuccess: useInvalidateCompanies(),
   });
 }

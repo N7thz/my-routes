@@ -1,5 +1,5 @@
-import { cookies, headers } from "next/headers";
-import { auth } from "@/lib/auth";
+import { cookies } from "next/headers";
+import { getSessionUser } from "@/lib/session";
 import { AppSidebar } from "@/components/app-sidebar";
 import { BottomNav } from "@/components/bottom-nav";
 import { Separator } from "@/components/ui/separator";
@@ -11,16 +11,13 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [session, cookieStore] = await Promise.all([
-    auth.api.getSession({ headers: await headers() }),
-    cookies(),
-  ]);
+  const [user, cookieStore] = await Promise.all([getSessionUser(), cookies()]);
 
   const defaultOpen = cookieStore.get("sidebar:state")?.value === "true";
 
   return (
     <SidebarProvider defaultOpen={defaultOpen}>
-      <AppSidebar user={session?.user} />
+      <AppSidebar user={user} />
       <main className="flex flex-1 min-w-0 flex-col overflow-hidden">
         <header
           className="flex shrink-0 items-center gap-2 border-b bg-background/95 backdrop-blur-sm px-4"
@@ -29,11 +26,9 @@ export default async function AppLayout({
             paddingTop: "env(safe-area-inset-top)",
           }}
         >
-          {/* Desktop: sidebar toggle */}
           <SidebarTrigger className="-ml-1 hidden md:flex" />
           <Separator orientation="vertical" className="mx-2 h-4 hidden md:flex" />
 
-          {/* Mobile: app branding */}
           <div className="flex items-center gap-2 md:hidden">
             <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground text-xs font-bold">
               MR

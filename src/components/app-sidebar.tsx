@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { HomeIcon, LogOutIcon, ChevronsUpDownIcon, BuildingIcon, RouteIcon, UserIcon } from "lucide-react";
+import { LogOutIcon, ChevronsUpDownIcon } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -24,6 +24,8 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 import { signOut } from "@/lib/auth-client";
+import { getInitials } from "@/lib/utils";
+import { navItems } from "@/components/nav-items";
 
 type User = {
   id: string;
@@ -31,23 +33,6 @@ type User = {
   email: string;
   image?: string | null;
 };
-
-const navItems = [
-  { title: "Início", href: "/", icon: HomeIcon },
-  { title: "Empresas", href: "/empresas", icon: BuildingIcon },
-  { title: "Rotas", href: "/rotas", icon: RouteIcon },
-  { title: "Perfil", href: "/perfil", icon: UserIcon },
-];
-
-function getInitials(name?: string | null): string {
-  if (!name) return "?";
-  return name
-    .split(" ")
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase();
-}
 
 export function AppSidebar({ user }: { user?: User | null }) {
   const pathname = usePathname();

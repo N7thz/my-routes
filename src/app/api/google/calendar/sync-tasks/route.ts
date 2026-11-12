@@ -6,28 +6,17 @@ import {
   CalendarApiError,
   type NewCalendarEvent,
 } from "@/lib/google-calendar-service";
-import {
-  isRunrunitConfigured,
-  getAllRunrunitTasks,
-  type RunrunitTask,
-} from "@/lib/runrunit-service";
+import { isRunrunitConfigured, listRunrunitTasks } from "@/lib/runrunit-service";
+import { runrunitTaskUrl, taskTimeRange, type RunrunitTask } from "@/lib/runrunit";
+import { nextDayKey } from "@/lib/dates";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-function nextDay(isoDate: string): string {
-  const d = new Date(isoDate + "T00:00:00Z");
-  d.setUTCDate(d.getUTCDate() + 1);
-  return d.toISOString().slice(0, 10);
-}
-
 /** Monta o evento a partir de uma tarefa; usa horário se agendada, senão dia inteiro. */
 function eventInputForTask(task: RunrunitTask): NewCalendarEvent | null {
-  const hasTimeRange =
-    task.is_scheduled && task.scheduled_start_time && task.gantt_bar_end_date;
-
   const description = [
     `Tarefa Runrunit #${task.id}`,
-    `https://secure.runrun.it/tasks/${task.id}`,
+    runrunitTaskUrl(task.id),
     task.client_name ? `Cliente: ${task.client_name}` : null,
     task.project_name ? `Projeto: ${task.project_name}` : null,
   ]
@@ -36,17 +25,14 @@ function eventInputForTask(task: RunrunitTask): NewCalendarEvent | null {
 
   const base = { summary: task.title, description, runrunitTaskId: task.id };
 
-  if (hasTimeRange) {
-    return {
-      ...base,
-      start: { dateTime: task.scheduled_start_time! },
-      end: { dateTime: task.gantt_bar_end_date! },
-    };
+  const range = taskTimeRange(task);
+  if (range) {
+    return { ...base, start: { dateTime: range.start }, end: { dateTime: range.end } };
   }
 
   const date = (task.desired_date ?? "").slice(0, 10);
   if (!date) return null;
-  return { ...base, start: { date }, end: { date: nextDay(date) } };
+  return { ...base, start: { date }, end: { date: nextDayKey(date) } };
 }
 
 export async function POST() {
@@ -63,8 +49,7 @@ export async function POST() {
     return NextResponse.json({ reason: "no-write-scope" }, { status: 403 });
   }
 
-  // Só tarefas abertas atribuídas a mim com data desejada definida.
-  const tasks = await getAllRunrunitTasks();
+  const tasks = await listRunrunitTasks();
   const candidates = tasks
     .filter((t) => !t.is_closed && t.desired_date)
     .map((task) => ({ task, input: eventInputForTask(task) }))

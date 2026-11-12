@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { getNotionClient } from "@/lib/notion-auth";
 import { listCompanies, importFromNotion } from "@/lib/company-service";
-import { CompaniesView } from "@/components/companies-view";
+import { CompaniesView } from "@/components/companies/companies-view";
 
 export default async function EmpresasPage() {
   const existing = await listCompanies();

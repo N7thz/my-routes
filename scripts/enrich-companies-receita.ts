@@ -82,7 +82,6 @@ async function main() {
   let updated = 0;
   let notFound = 0;
   let errors = 0;
-  let skipped = 0;
 
   for (let i = 0; i < toProcess.length; i++) {
     const company = toProcess[i];
@@ -123,7 +122,6 @@ async function main() {
   console.log(`Atualizadas : ${updated}`);
   console.log(`Não achadas : ${notFound}`);
   console.log(`Erros       : ${errors}`);
-  if (skipped) console.log(`Puladas     : ${skipped}`);
   console.log("─────────────────────────────────────────");
 
   await pool.end();

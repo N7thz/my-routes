@@ -2,15 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { HomeIcon, BuildingIcon, RouteIcon, UserIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-const navItems = [
-  { title: "Início", href: "/", icon: HomeIcon },
-  { title: "Empresas", href: "/empresas", icon: BuildingIcon },
-  { title: "Rotas", href: "/rotas", icon: RouteIcon },
-  { title: "Perfil", href: "/perfil", icon: UserIcon },
-];
+import { navItems } from "@/components/nav-items";
 
 export function BottomNav() {
   const pathname = usePathname();

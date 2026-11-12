@@ -1,20 +1,13 @@
 import { NextResponse } from "next/server";
+import { CNPJ_LENGTH, cnpjDigits, type CnpjData } from "@/lib/cnpj";
 
 type Params = { params: Promise<{ cnpj: string }> };
 
-export type CnpjData = {
-  cnpj: string;
-  razaoSocial: string;
-  nomeFantasia: string | null;
-  address: string;
-  situacao: string;
-};
-
 export async function GET(_req: Request, { params }: Params) {
   const { cnpj } = await params;
-  const digits = cnpj.replace(/\D/g, "");
+  const digits = cnpjDigits(cnpj);
 
-  if (digits.length !== 14) {
+  if (digits.length !== CNPJ_LENGTH) {
     return NextResponse.json({ error: "CNPJ inválido" }, { status: 400 });
   }
 

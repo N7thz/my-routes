@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
+import { dayKey, formatDate, todayKey } from "@/lib/dates";
 import {
   useRoutes,
   useCreateRoute,
@@ -73,13 +74,10 @@ import {
   CalendarIcon,
   CalendarPlusIcon,
   BuildingIcon,
-  ClipboardXIcon,
   NavigationIcon,
   ChevronUpIcon,
   ChevronDownIcon,
 } from "lucide-react";
-
-// ─── status config ─────────────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<
   RouteStatus,
@@ -89,27 +87,6 @@ const STATUS_CONFIG: Record<
   EM_ANDAMENTO:{ label: "Em Andamento", variant: "default" },
   CONCLUIDA:   { label: "Concluída",    variant: "outline", className: "border-emerald-500 text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-700" },
 };
-
-// ─── helpers ──────────────────────────────────────────────────────────────────
-
-function formatDate(date: Date | string | null): string {
-  if (!date) return "—";
-  return new Date(date).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
-}
-
-function todayIso(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-// chave de dia TZ-safe a partir da data da empresa (ISO UTC → fatia YYYY-MM-DD)
-function dayKey(date: Date | string | null): string | null {
-  if (!date) return null;
-  const s = typeof date === "string" ? date : date.toISOString();
-  return s.slice(0, 10);
-}
-
-// ─── quick status ─────────────────────────────────────────────────────────────
 
 function QuickRouteStatus({ route }: { route: RouteRecord }) {
   const update = useUpdateRoute();
@@ -137,8 +114,6 @@ function QuickRouteStatus({ route }: { route: RouteRecord }) {
     </DropdownMenu>
   );
 }
-
-// ─── create route dialog ───────────────────────────────────────────────────────
 
 function CreateRouteDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const create = useCreateRoute();
@@ -177,13 +152,11 @@ function CreateRouteDialog({ open, onClose }: { open: boolean; onClose: () => vo
   );
 }
 
-// ─── generate route from date dialog ────────────────────────────────────────────
-
 function GenerateRouteDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { data: companies = [] } = useCompanies();
   const { data: routes = [] } = useRoutes();
   const generate = useGenerateRoute();
-  const [date, setDate] = useState(() => todayIso());
+  const [date, setDate] = useState(() => todayKey());
   const [error, setError] = useState<string | null>(null);
 
   const ofDay = useMemo(
@@ -270,8 +243,6 @@ function GenerateRouteDialog({ open, onClose }: { open: boolean; onClose: () => 
   );
 }
 
-// ─── edit route dialog ─────────────────────────────────────────────────────────
-
 function EditRouteDialog({ route, onClose }: { route: RouteRecord | null; onClose: () => void }) {
   const update = useUpdateRoute();
   const [name, setName] = useState(route?.name ?? "");
@@ -308,8 +279,6 @@ function EditRouteDialog({ route, onClose }: { route: RouteRecord | null; onClos
     </Dialog>
   );
 }
-
-// ─── add stop dialog ──────────────────────────────────────────────────────────
 
 function AddStopDialog({
   routeId,
@@ -398,8 +367,6 @@ function AddStopDialog({
   );
 }
 
-// ─── stop row ─────────────────────────────────────────────────────────────────
-
 function StopRow({
   stop,
   routeId,
@@ -472,8 +439,6 @@ function StopRow({
   );
 }
 
-// ─── route sheet ──────────────────────────────────────────────────────────────
-
 function RouteSheet({
   route,
   onClose,
@@ -499,7 +464,6 @@ function RouteSheet({
   }
 
   const visited = route.stops.filter((s) => s.visitedAt).length;
-  const cfg = STATUS_CONFIG[route.status];
 
   return (
     <>
@@ -600,8 +564,6 @@ function RouteSheet({
   );
 }
 
-// ─── route card ───────────────────────────────────────────────────────────────
-
 function RouteCard({
   route,
   onClick,
@@ -692,8 +654,6 @@ function RouteCard({
   );
 }
 
-// ─── delete dialog ─────────────────────────────────────────────────────────────
-
 function DeleteRouteDialog({ route, onClose }: { route: RouteRecord | null; onClose: () => void }) {
   const del = useDeleteRoute();
   return (
@@ -719,8 +679,6 @@ function DeleteRouteDialog({ route, onClose }: { route: RouteRecord | null; onCl
     </AlertDialog>
   );
 }
-
-// ─── main view ─────────────────────────────────────────────────────────────────
 
 export function RoutesView() {
   const { data: routes, isLoading } = useRoutes();

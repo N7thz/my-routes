@@ -1,17 +1,8 @@
 import { useEffect, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { CalendarRouteSyncResult } from "@/lib/route-service";
-
-export type { CalendarRouteSyncResult };
-
-type SyncReason = "not-connected" | "no-calendar-scope" | "unauthenticated";
-
-export class SyncCalendarRoutesError extends Error {
-  constructor(public reason: SyncReason) {
-    super(reason);
-    this.name = "SyncCalendarRoutesError";
-  }
-}
+import { api } from "@/lib/api-client";
+import { ROUTES_KEY } from "@/hooks/use-routes";
+import type { CalendarRouteSyncResult } from "@/lib/route-sync-service";
 
 /** Intervalo mínimo entre sincronizações automáticas ao abrir a página. */
 const AUTO_SYNC_THROTTLE_MS = 5 * 60 * 1000;
@@ -29,32 +20,26 @@ function markSynced() {
   try {
     localStorage.setItem(LAST_SYNC_KEY, String(Date.now()));
   } catch {
-    // localStorage indisponível (modo privado) — só perde o throttle.
+    // localStorage indisponível (modo privado) — só se perde o throttle.
   }
 }
 
-async function syncCalendarRoutes(): Promise<CalendarRouteSyncResult> {
-  const res = await fetch("/api/routes/sync-calendar", { method: "POST" });
-
-  if (res.status === 404 || res.status === 401) {
-    const body = (await res.json()) as { reason: SyncReason };
-    throw new SyncCalendarRoutesError(body.reason);
-  }
-  if (!res.ok) throw new Error("Falha ao atualizar rotas a partir da agenda");
-
-  return res.json();
-}
-
-export function useSyncCalendarRoutes() {
+/** Falha com `ApiError.reason` de `GoogleUnavailableReason` quando falta o Google. */
+function useSyncCalendarRoutes() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: syncCalendarRoutes,
+    mutationFn: () =>
+      api<CalendarRouteSyncResult>(
+        "/api/routes/sync-calendar",
+        "Falha ao atualizar rotas a partir da agenda",
+        { method: "POST" }
+      ),
     // Marca ao iniciar (não ao terminar) para duas abas não dispararem juntas.
     onMutate: markSynced,
     onSuccess: (result) => {
       const changed =
         result.routesCreated + result.stopsAdded + result.stopsUpdated + result.stopsRemoved;
-      if (changed > 0) queryClient.invalidateQueries({ queryKey: ["routes"] });
+      if (changed > 0) queryClient.invalidateQueries({ queryKey: ROUTES_KEY });
     },
   });
 }

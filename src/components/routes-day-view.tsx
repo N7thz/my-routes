@@ -4,10 +4,9 @@ import { useMemo, useState } from "react";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import { useRoutes, useMarkStopVisited, useUpdateRoute, useReorderStops } from "@/hooks/use-routes";
-import {
-  useAutoSyncCalendarRoutes,
-  SyncCalendarRoutesError,
-} from "@/hooks/use-sync-calendar-routes";
+import { useAutoSyncCalendarRoutes } from "@/hooks/use-sync-calendar-routes";
+import { ApiError } from "@/lib/api-client";
+import { dateFromKey, dayKey, todayKey } from "@/lib/dates";
 import { signIn } from "@/lib/auth-client";
 import type { RouteRecord, RouteStatus, StopRecord } from "@/lib/route-service";
 import { RouteMap } from "@/components/route-map";
@@ -45,8 +44,6 @@ import {
 } from "lucide-react";
 import { RoutesView } from "@/components/routes-view";
 
-// ── Constants ──────────────────────────────────────────────────────────────────
-
 const UNDATED = "__undated__";
 
 const STATUS_CONFIG: Record<RouteStatus, { label: string; className: string }> = {
@@ -64,26 +61,6 @@ const STATUS_CONFIG: Record<RouteStatus, { label: string; className: string }> =
       "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 border-transparent",
   },
 };
-
-// ── Date helpers (TZ-safe) ───────────────────────────────────────────────────────
-// route.date chega como ISO UTC (date-only à meia-noite). Fatiar os 10 primeiros
-// caracteres devolve o dia pretendido sem sofrer conversão de fuso.
-
-function dayKey(date: Date | string | null): string | null {
-  if (!date) return null;
-  const s = typeof date === "string" ? date : date.toISOString();
-  return s.slice(0, 10);
-}
-
-function todayKey(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-// Constrói a data ao meio-dia local a partir da chave, evitando bordas de fuso.
-function dateFromKey(key: string): Date {
-  return new Date(`${key}T12:00:00`);
-}
 
 function relativeDayLabel(key: string): string {
   if (key === UNDATED) return "Sem data";
@@ -125,8 +102,6 @@ function mapsUrl(stops: StopRecord[]): string {
   return `https://www.google.com/maps/dir/${addrs.join("/")}`;
 }
 
-// ── Stop item (timeline) ───────────────────────────────────────────────────────
-
 function StopItem({
   stop,
   index,
@@ -148,7 +123,6 @@ function StopItem({
 
   return (
     <div className="flex gap-3 px-4">
-      {/* timeline column */}
       <div className="flex shrink-0 flex-col items-center">
         <button
           onClick={onToggle}
@@ -175,7 +149,6 @@ function StopItem({
         {!isLast && <div className="mt-1 w-0.5 flex-1 min-h-4 bg-border" />}
       </div>
 
-      {/* content column */}
       <div className={cn("flex-1 min-w-0 pt-1", !isLast ? "pb-4" : "pb-2")}>
         {isCurrent && !visited && (
           <span className="mb-0.5 inline-block text-[10px] font-semibold uppercase tracking-wider text-primary">
@@ -203,7 +176,6 @@ function StopItem({
         )}
       </div>
 
-      {/* reorder controls */}
       <div className="flex shrink-0 flex-col justify-center gap-0.5 pt-1">
         <button
           onClick={() => onMove(-1)}
@@ -225,8 +197,6 @@ function StopItem({
     </div>
   );
 }
-
-// ── Empty states ─────────────────────────────────────────────────────────────────
 
 function EmptyState({
   onManage,
@@ -307,8 +277,6 @@ function EmptyDay({
     </div>
   );
 }
-
-// ── Route picker (lista agrupada) ────────────────────────────────────────────────
 
 function RoutePicker({
   routes,
@@ -399,8 +367,6 @@ function RoutePicker({
   );
 }
 
-// ── Main component ─────────────────────────────────────────────────────────────
-
 export function RoutesDayView({ userImage }: { userImage?: string | null }) {
   const { data: routes = [], isLoading } = useRoutes();
   const markVisited = useMarkStopVisited();
@@ -417,7 +383,6 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
   const [mobileTab, setMobileTab] = useState<"stops" | "map">("stops");
   const [manageOpen, setManageOpen] = useState(false);
 
-  // dias distintos que possuem rota (ascendente) + se há rotas sem data
   const routeDays = useMemo(() => {
     const set = new Set<string>();
     for (const r of routes) {
@@ -441,7 +406,6 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
 
   const route = routesOfDay.find((r) => r.id === selectedRouteId) ?? routesOfDay[0] ?? null;
 
-  // navegação entre dias com rota
   const canPrev =
     effectiveDay === UNDATED ? routeDays.length > 0 : routeDays.some((d) => d < effectiveDay);
   const canNext =
@@ -509,7 +473,6 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
     );
   }
 
-  // nenhuma rota em todo o sistema
   if (routes.length === 0) {
     return (
       <EmptyState
@@ -523,7 +486,8 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
   const statusCfg = route ? STATUS_CONFIG[route.status] : null;
 
   const syncNeedsGoogle =
-    syncCalendar.error instanceof SyncCalendarRoutesError &&
+    syncCalendar.error instanceof ApiError &&
+    !!syncCalendar.error.reason &&
     syncCalendar.error.reason !== "unauthenticated";
   const syncTitle = syncNeedsGoogle
     ? "Conecte o Google Agenda para gerar rotas dos eventos"
@@ -533,9 +497,7 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
 
   return (
     <div className="flex h-full flex-col">
-      {/* ── Header bar ─────────────────────────────────────────────────── */}
       <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-b bg-background/95 px-3 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        {/* Date navigator */}
         <div className="flex shrink-0 items-center gap-1">
           <Button
             variant="ghost"
@@ -583,7 +545,6 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
           )}
         </div>
 
-        {/* Route picker (lista de rotas, com foco nas anteriores) */}
         <RoutePicker
           routes={routes}
           activeId={route?.id ?? null}
@@ -594,7 +555,6 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
           }}
         />
 
-        {/* Route of day + status */}
         {route ? (
           <div className="flex min-w-0 flex-1 items-center gap-2">
             {routesOfDay.length > 1 ? (
@@ -650,7 +610,6 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
           <span className="flex-1 text-sm text-muted-foreground">Nenhuma rota neste dia</span>
         )}
 
-        {/* Progress (sm+) */}
         {route && totalCount > 0 && (
           <div className="hidden shrink-0 items-center gap-2 sm:flex">
             <div className="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
@@ -665,7 +624,6 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
           </div>
         )}
 
-        {/* Mobile tab toggle */}
         {route && (
           <div className="flex shrink-0 rounded-md border p-0.5 sm:hidden">
             <button
@@ -693,7 +651,6 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
           </div>
         )}
 
-        {/* Sync com a agenda */}
         <Button
           variant="ghost"
           size="icon"
@@ -721,7 +678,6 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
           </Button>
         )}
 
-        {/* Manage sheet */}
         <Sheet open={manageOpen} onOpenChange={setManageOpen}>
           <SheetTrigger asChild>
             <Button variant="ghost" size="icon" className="shrink-0 size-8" title="Gerenciar rotas">
@@ -739,7 +695,6 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
         </Sheet>
       </div>
 
-      {/* ── Main content ──────────────────────────────────────────────── */}
       {!route ? (
         <div className="flex-1 min-h-0">
           <EmptyDay
@@ -753,7 +708,6 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
         </div>
       ) : (
         <div className="flex flex-1 min-h-0">
-          {/* Left panel — stops timeline */}
           <div
             className={cn(
               "flex w-80 shrink-0 flex-col border-r",
@@ -761,7 +715,6 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
               mobileTab === "stops" ? "flex" : "hidden"
             )}
           >
-            {/* Header */}
             <div className="flex shrink-0 items-center justify-between border-b px-4 py-2">
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Paradas
@@ -771,7 +724,6 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
               </span>
             </div>
 
-            {/* Timeline list */}
             <div className="flex-1 overflow-y-auto py-3">
               {route.stops.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 px-4 py-8 text-center text-sm text-muted-foreground">
@@ -794,10 +746,8 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
               )}
             </div>
 
-            {/* Footer */}
             {route.stops.length > 0 && (
               <div className="shrink-0 border-t px-4 py-3">
-                {/* Mobile progress */}
                 <div className="mb-3 flex items-center gap-2 sm:hidden">
                   <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
                     <div
@@ -823,7 +773,6 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
             )}
           </div>
 
-          {/* Right panel — map */}
           <div
             className={cn(
               "flex-1 min-w-0",

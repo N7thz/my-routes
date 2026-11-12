@@ -1,29 +1,31 @@
-import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { RunrunitTask } from "@/lib/runrunit-service";
+import { apiOrUnavailable } from "@/lib/api-client";
+import { currentMonthKey } from "@/lib/dates";
+import type { RunrunitTask } from "@/lib/runrunit";
 
-type NotConfiguredResult = { reason: "not-configured" };
-
-function currentMonth(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+function fetchTasks(query: string) {
+  return apiOrUnavailable<RunrunitTask[], "not-configured">(
+    `/api/runrunit/tasks${query}`,
+    "Falha ao carregar tarefas do Runrunit"
+  );
 }
 
-async function fetchRunrunitTasks(
-  month: string
-): Promise<RunrunitTask[] | NotConfiguredResult> {
-  const params = new URLSearchParams({ month });
-  const res = await fetch(`/api/runrunit/tasks?${params}`);
-  if (res.status === 404) return res.json() as Promise<NotConfiguredResult>;
-  if (!res.ok) throw new Error("Falha ao carregar tarefas do Runrunit");
-  return res.json();
-}
-
+/** Tarefas do mês atual mais as sem data — o recorte do calendário. */
 export function useRunrunitTasks() {
-  const month = useMemo(currentMonth, []);
+  const month = currentMonthKey();
   return useQuery({
     queryKey: ["runrunit", "tasks", month],
-    queryFn: () => fetchRunrunitTasks(month),
+    queryFn: () => fetchTasks(`?month=${month}`),
+    staleTime: 2 * 60 * 1000,
+    retry: 1,
+  });
+}
+
+/** Todas as tarefas, sem recorte de data. */
+export function useRunrunitList() {
+  return useQuery({
+    queryKey: ["runrunit", "tasks", "all"],
+    queryFn: () => fetchTasks(""),
     staleTime: 2 * 60 * 1000,
     retry: 1,
   });

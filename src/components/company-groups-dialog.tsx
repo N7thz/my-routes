@@ -40,8 +40,6 @@ import {
   Trash2Icon,
 } from "lucide-react";
 
-// ─── cores ────────────────────────────────────────────────────────────────────
-
 export const GROUP_COLORS = [
   "#3b82f6",
   "#10b981",
@@ -63,8 +61,6 @@ export function GroupDot({ color, className }: { color: string | null; className
     />
   );
 }
-
-// ─── formulário de grupo (nome, cor e empresas) ───────────────────────────────
 
 function GroupForm({
   group,
@@ -203,8 +199,6 @@ function GroupForm({
     </form>
   );
 }
-
-// ─── diálogo principal ────────────────────────────────────────────────────────
 
 export function CompanyGroupsDialog({
   open,

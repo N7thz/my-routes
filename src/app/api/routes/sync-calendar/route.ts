@@ -1,15 +1,12 @@
 import { NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@/lib/auth";
-import { syncCalendarEventsToRoutes } from "@/lib/route-service";
+import { getSessionUser } from "@/lib/session";
+import { syncCalendarEventsToRoutes } from "@/lib/route-sync-service";
 
 export async function POST() {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session?.user?.id) {
-    return NextResponse.json({ reason: "unauthenticated" }, { status: 401 });
-  }
+  const user = await getSessionUser();
+  if (!user) return NextResponse.json({ reason: "unauthenticated" }, { status: 401 });
 
-  const result = await syncCalendarEventsToRoutes(session.user.id);
+  const result = await syncCalendarEventsToRoutes(user.id);
   // Google não conectado ou sem escopo de calendário — mesmo contrato de
   // /api/google/calendar/events, para o cliente oferecer a reconexão.
   if (!result.ok) return NextResponse.json({ reason: result.reason }, { status: 404 });
