@@ -20,13 +20,12 @@ function allowedEmails(): Set<string> {
 
 export const auth = betterAuth({
   // Em produção usamos a URL pública fixa (domínio da Vercel).
-  // Em dev deixamos undefined para o better-auth inferir a origem a partir
-  // da requisição — resolve para http://localhost:<porta> automaticamente,
-  // sem depender de uma porta fixa.
+  // Em dev a origem vem da requisição, restrita a localhost em qualquer porta
+  // (não depende de porta fixa e não dispara o aviso "Base URL is not set").
   baseURL:
     process.env.NODE_ENV === "production"
       ? process.env.NEXT_PUBLIC_APP_URL
-      : undefined,
+      : { allowedHosts: ["localhost:*", "127.0.0.1:*"], protocol: "http" },
   database: prismaAdapter(prisma, {
     provider: "postgresql",
   }),
