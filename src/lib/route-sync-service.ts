@@ -43,6 +43,8 @@ export type RouteSyncResult = {
   routesCreated: number;
   stopsAdded: number;
   days: string[];
+  /** Rotas criadas ou com paradas mudadas nesta rodada (candidatas a reordenar). */
+  changedRouteIds: string[];
 };
 
 /**
@@ -74,6 +76,7 @@ export async function syncRunrunitTasksToRoutes(userId: string): Promise<RouteSy
     routesCreated: 0,
     stopsAdded: 0,
     days: [],
+    changedRouteIds: [],
   };
 
   for (const [day, cities] of dayCities) {
@@ -86,6 +89,7 @@ export async function syncRunrunitTasksToRoutes(userId: string): Promise<RouteSy
 
     const existing = new Set(route.stops.map((s) => s.companyId));
     const toAdd = companies.filter((c) => !existing.has(c.id));
+    if (created || toAdd.length > 0) result.changedRouteIds.push(route.id);
     if (toAdd.length === 0) continue;
 
     const firstOrder = nextStopOrder(route.stops);
@@ -115,6 +119,8 @@ export type CalendarRouteSyncResult = {
   stopsUpdated: number;
   stopsRemoved: number;
   days: string[];
+  /** Rotas criadas ou com paradas mudadas nesta rodada (candidatas a reordenar). */
+  changedRouteIds: string[];
 };
 
 export type CalendarRouteSyncOutcome =
@@ -171,6 +177,7 @@ export async function syncCalendarEventsToRoutes(
     stopsUpdated: 0,
     stopsRemoved: 0,
     days: [],
+    changedRouteIds: [],
   };
 
   for (const day of [...byDay.keys()].sort()) {
@@ -192,6 +199,7 @@ export async function syncCalendarEventsToRoutes(
     );
     let nextOrder = nextStopOrder(route.stops);
     const keptStopIds = new Set<string>();
+    const changesBefore = result.stopsAdded + result.stopsUpdated + result.stopsRemoved;
 
     for (const candidate of candidates) {
       // Uma parada da rodada anterior (pelo evento) ou uma parada de outra
@@ -236,6 +244,10 @@ export async function syncCalendarEventsToRoutes(
         await prisma.stop.deleteMany({ where: { id: { in: stale.map((s) => s.id) } } });
         result.stopsRemoved += stale.length;
       }
+    }
+
+    if (created || result.stopsAdded + result.stopsUpdated + result.stopsRemoved > changesBefore) {
+      result.changedRouteIds.push(route.id);
     }
   }
 

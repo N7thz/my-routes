@@ -3,16 +3,17 @@
 import { useState } from "react";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
-import { useRoutes, useMarkStopVisited, useUpdateRoute, useReorderStops } from "@/hooks/use-routes";
+import { useRoutes, useRouteDays, useMarkStopVisited, useUpdateRoute, useReorderStops } from "@/hooks/use-routes";
 import { useAutoSyncCalendarRoutes } from "@/hooks/use-sync-calendar-routes";
+import { useRunAutoRoute } from "@/hooks/use-auto-route";
 import { ApiError } from "@/lib/api-client";
-import { dayKey, todayKey } from "@/lib/dates";
+import { dayKey, defaultRoutesFrom, shiftDayKey, todayKey } from "@/lib/dates";
 import { signIn } from "@/lib/auth-client";
 import type { RouteStatus } from "@/lib/route-service";
 import { RouteMap } from "@/components/route-map";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { CalendarSyncIcon, ListIcon, Loader2Icon, MapIcon, Settings2Icon } from "lucide-react";
+import { CalendarSyncIcon, ListIcon, Loader2Icon, MapIcon, Settings2Icon, SparklesIcon } from "lucide-react";
 import { RoutesView } from "@/components/routes-view";
 import { UNDATED, relativeDayLabel } from "@/components/routes/day-labels";
 import { DayNavigator } from "@/components/routes/day-navigator";
@@ -22,12 +23,14 @@ import { RouteTitle } from "@/components/routes/route-title";
 import { ProgressBar, StopsPanel } from "@/components/routes/stops-panel";
 
 export function RoutesDayView({ userImage }: { userImage?: string | null }) {
-  const { data: routes = [], isLoading } = useRoutes();
+  const { data: days = [], isLoading: daysLoading } = useRouteDays();
   const markVisited = useMarkStopVisited();
   const updateRoute = useUpdateRoute();
   const reorder = useReorderStops();
   // Roda uma vez ao abrir a página (com throttle) e alimenta o botão manual.
   const syncCalendar = useAutoSyncCalendarRoutes();
+  // "Gerar agora": Runrunit + agenda + ordem otimizada, sem esperar o cron.
+  const autoRoute = useRunAutoRoute();
   const { resolvedTheme } = useTheme();
 
   // selectedDay: null = padrão (hoje) · UNDATED = bucket sem data · senão "YYYY-MM-DD"
@@ -37,18 +40,19 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
   const [mobileTab, setMobileTab] = useState<"stops" | "map">("stops");
   const [manageOpen, setManageOpen] = useState(false);
 
-  const routeDays = [
-    ...new Set(
-      routes.flatMap((r) => {
-        const k = dayKey(r.date);
-        return k ? [k] : [];
-      }),
-    ),
-  ].sort();
-  const hasUndated = routes.some((r) => !r.date);
+  // A navegação usa a lista leve de dias (todo o histórico); as rotas em si só
+  // vêm da janela em volta do dia aberto.
+  const routeDays = days.flatMap((d) => (d.day ? [d.day] : []));
+  const hasUndated = days.some((d) => !d.day);
 
   const today = todayKey();
   const effectiveDay = selectedDay ?? today;
+  const isOldDay = effectiveDay !== UNDATED && effectiveDay < defaultRoutesFrom();
+  const { data: routes = [], isLoading: routesLoading } = useRoutes(
+    isOldDay ? { from: shiftDayKey(effectiveDay, -30), to: shiftDayKey(effectiveDay, 30) } : undefined,
+  );
+  const isLoading = daysLoading || routesLoading;
+  const hasAnyRoute = days.length > 0;
 
   const routesOfDay = routes
     .filter((r) => (effectiveDay === UNDATED ? !r.date : dayKey(r.date) === effectiveDay))
@@ -104,18 +108,18 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
 
   // Enquanto a primeira sincronização roda, ainda pode aparecer rota — não
   // mostrar "nenhuma rota criada" antes dela responder.
-  if (isLoading || (routes.length === 0 && syncCalendar.isPending)) {
+  if (isLoading || (!hasAnyRoute && syncCalendar.isPending)) {
     return (
       <div className="flex h-full items-center justify-center gap-2 text-muted-foreground">
         <Loader2Icon className="size-4 animate-spin" />
         <span className="text-sm">
-          {routes.length === 0 && syncCalendar.isPending ? "Buscando eventos na agenda…" : "Carregando rotas…"}
+          {!hasAnyRoute && syncCalendar.isPending ? "Buscando eventos na agenda…" : "Carregando rotas…"}
         </span>
       </div>
     );
   }
 
-  if (routes.length === 0) {
+  if (!hasAnyRoute) {
     return (
       <EmptyState
         onManage={() => setManageOpen(true)}
@@ -182,6 +186,7 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
         {route && (
           <div className="flex shrink-0 rounded-md border p-0.5 sm:hidden">
             <button
+              type="button"
               onClick={() => setMobileTab("stops")}
               className={cn(
                 "flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors",
@@ -193,6 +198,7 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
               <ListIcon className="size-3" /> Paradas
             </button>
             <button
+              type="button"
               onClick={() => setMobileTab("map")}
               className={cn(
                 "flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors",
@@ -210,6 +216,27 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
           variant="ghost"
           size="icon"
           className="ml-auto shrink-0 size-8 sm:ml-0"
+          onClick={() => autoRoute.mutate()}
+          disabled={autoRoute.isPending}
+          aria-label="Gerar rotas automáticas agora"
+          title={
+            autoRoute.isSuccess
+              ? autoRoute.data.summary
+              : autoRoute.isError
+                ? autoRoute.error.message
+                : "Gerar rotas automáticas agora (Runrunit + agenda, na melhor ordem)"
+          }
+        >
+          {autoRoute.isPending ? (
+            <Loader2Icon className="size-4 animate-spin" />
+          ) : (
+            <SparklesIcon className={cn("size-4", autoRoute.isError && "text-destructive")} />
+          )}
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="shrink-0 size-8"
           onClick={() => syncCalendar.mutate()}
           disabled={syncCalendar.isPending}
           title={syncTitle}

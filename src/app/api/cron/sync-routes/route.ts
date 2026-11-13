@@ -1,12 +1,9 @@
 import { NextResponse } from "next/server";
-import { backfillCoordinates } from "@/lib/geocode";
-import { prisma } from "@/lib/prisma";
-import { isRunrunitConfigured } from "@/lib/runrunit-service";
-import { syncCalendarEventsToRoutes, syncRunrunitTasksToRoutes } from "@/lib/route-sync-service";
+import { runAutoRouteForAllUsers } from "@/lib/auto-route-service";
 
 // Roda a cada requisição (usa headers + banco); nunca cacheado.
 export const dynamic = "force-dynamic";
-// Geocodificação a 1 req/s: até ~25 s só nela.
+// Geocodificação a 1 req/s (até ~25 s) + OSRM por rota alterada.
 export const maxDuration = 60;
 
 export async function GET(request: Request) {
@@ -20,28 +17,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const email = process.env.CRON_USER_EMAIL;
-  if (!email) {
-    return NextResponse.json({ error: "CRON_USER_EMAIL não configurado" }, { status: 503 });
-  }
-
-  const user = await prisma.user.findUnique({
-    where: { email },
-    select: { id: true },
-  });
-  if (!user) {
-    return NextResponse.json({ error: `Usuário ${email} não encontrado` }, { status: 404 });
-  }
-
-  // As duas fontes são independentes: uma indisponível não impede a outra.
-  const runrunit = isRunrunitConfigured()
-    ? await syncRunrunitTasksToRoutes(user.id)
-    : { skipped: "runrunit-nao-configurado" };
-
-  const calendar = await syncCalendarEventsToRoutes(user.id);
-
-  // Por último: as paradas criadas acima também entram no preenchimento.
-  const geocode = await backfillCoordinates();
-
-  return NextResponse.json({ runrunit, calendar, geocode });
+  // Todos os usuários com a rota automática ligada (e o CRON_USER_EMAIL, que
+  // era o único atendido antes das configurações por usuário).
+  return NextResponse.json(await runAutoRouteForAllUsers());
 }
