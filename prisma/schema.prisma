@@ -19,21 +19,24 @@ enum CompanyStatus {
 }
 
 model Company {
-  id           String         @id @default(cuid())
-  name         String
-  cnpj         String?
-  address      String?
-  lat          Float?
-  lng          Float?
-  date         DateTime?
-  status       CompanyStatus?
-  observations String?
-  notionId     String?        @unique
-  groupId      String?        @map("group_id")
-  group        CompanyGroup?  @relation(fields: [groupId], references: [id], onDelete: SetNull)
-  stops        Stop[]
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  id              String         @id @default(cuid())
+  name            String
+  cnpj            String?
+  address         String?
+  lat             Float?
+  lng             Float?
+  // Última tentativa de geocodificação sem resultado: tira da fila do cron
+  // até o endereço mudar (editar o endereço zera o campo).
+  geocodeFailedAt DateTime?      @map("geocode_failed_at")
+  date            DateTime?
+  status          CompanyStatus?
+  observations    String?
+  notionId        String?        @unique
+  groupId         String?        @map("group_id")
+  group           CompanyGroup?  @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  stops           Stop[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
   @@index([groupId])
   @@map("company")
@@ -77,21 +80,22 @@ model Route {
 }
 
 model Stop {
-  id        String    @id @default(cuid())
-  routeId   String    @map("route_id")
-  route     Route     @relation(fields: [routeId], references: [id], onDelete: Cascade)
-  companyId String?   @map("company_id")
-  company   Company?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  id              String    @id @default(cuid())
+  routeId         String    @map("route_id")
+  route           Route     @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  companyId       String?   @map("company_id")
+  company         Company?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
   // Evento do Google Agenda que originou a parada. Permite ressincronizar sem
   // duplicar e remover a parada quando o evento sai da agenda.
-  calendarEventId String? @map("calendar_event_id")
-  label     String?
-  address   String
-  lat       Float?
-  lng       Float?
-  order     Int       @default(0)
-  visitedAt DateTime? @map("visited_at")
-  createdAt DateTime  @default(now()) @map("created_at")
+  calendarEventId String?   @map("calendar_event_id")
+  label           String?
+  address         String
+  lat             Float?
+  lng             Float?
+  geocodeFailedAt DateTime? @map("geocode_failed_at")
+  order           Int       @default(0)
+  visitedAt       DateTime? @map("visited_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
 
   @@unique([routeId, calendarEventId])
   @@map("stop")
@@ -99,10 +103,34 @@ model Stop {
 
 // --- Better Auth models ---
 
+// --- Rota do dia automática ---
+
+// Preferências da geração automática de rotas (cron diário e botão "Gerar
+// agora"). Sem registro, o usuário fica de fora do cron — exceto o
+// CRON_USER_EMAIL, que já era atendido antes desta tabela existir.
+model AutoRouteSettings {
+  userId         String    @id @map("user_id")
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  enabled        Boolean   @default(true)
+  useRunrunit    Boolean   @default(true) @map("use_runrunit")
+  useCalendar    Boolean   @default(true) @map("use_calendar")
+  optimizeOrder  Boolean   @default(true) @map("optimize_order")
+  // Ponto de saída e chegada do dia (casa/escritório) usado na otimização.
+  originAddress  String?   @map("origin_address")
+  originLat      Float?    @map("origin_lat")
+  originLng      Float?    @map("origin_lng")
+  lastRunAt      DateTime? @map("last_run_at")
+  lastRunOk      Boolean?  @map("last_run_ok")
+  lastRunSummary String?   @map("last_run_summary")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@map("auto_route_settings")
+}
+
 model User {
-  id            String    @id
+  id            String             @id
   name          String
-  email         String    @unique
+  email         String             @unique
   emailVerified Boolean
   image         String?
   createdAt     DateTime
@@ -110,6 +138,7 @@ model User {
   sessions      Session[]
   accounts      Account[]
   routes        Route[]
+  autoRoute     AutoRouteSettings?
 
   @@map("user")
 }
