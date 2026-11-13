@@ -61,11 +61,7 @@ export function AppSidebar({ user }: { user?: User | null }) {
             <SidebarMenu>
               {navItems.map((item) => (
                 <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={pathname === item.href}
-                    tooltip={item.title}
-                  >
+                  <SidebarMenuButton asChild isActive={pathname === item.href} tooltip={item.title}>
                     <Link href={item.href}>
                       <item.icon />
                       <span>{item.title}</span>
@@ -94,9 +90,7 @@ export function AppSidebar({ user }: { user?: User | null }) {
                   </Avatar>
                   <div className="flex min-w-0 flex-1 flex-col leading-none text-left">
                     <span className="truncate text-sm font-medium">{user?.name}</span>
-                    <span className="truncate text-xs text-muted-foreground">
-                      {user?.email}
-                    </span>
+                    <span className="truncate text-xs text-muted-foreground">{user?.email}</span>
                   </div>
                   <ChevronsUpDownIcon className="ml-auto size-4 shrink-0" />
                 </SidebarMenuButton>

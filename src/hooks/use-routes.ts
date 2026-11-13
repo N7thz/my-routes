@@ -25,7 +25,7 @@ function useRouteMutation<TInput, TResult>(mutationFn: (input: TInput) => Promis
 
 export function useCreateRoute() {
   return useRouteMutation((data: RouteCreateInput) =>
-    api<RouteRecord>("/api/routes", "Falha ao criar rota", { method: "POST", body: data })
+    api<RouteRecord>("/api/routes", "Falha ao criar rota", { method: "POST", body: data }),
   );
 }
 
@@ -34,20 +34,18 @@ export function useGenerateRoute() {
     api<RouteRecord>("/api/routes/generate", "Falha ao gerar rota", {
       method: "POST",
       body: { date },
-    })
+    }),
   );
 }
 
 export function useUpdateRoute() {
   return useRouteMutation(({ id, data }: { id: string; data: RouteUpdateInput }) =>
-    api<RouteRecord>(`/api/routes/${id}`, "Falha ao atualizar rota", { method: "PUT", body: data })
+    api<RouteRecord>(`/api/routes/${id}`, "Falha ao atualizar rota", { method: "PUT", body: data }),
   );
 }
 
 export function useDeleteRoute() {
-  return useRouteMutation((id: string) =>
-    api(`/api/routes/${id}`, "Falha ao excluir rota", { method: "DELETE" })
-  );
+  return useRouteMutation((id: string) => api(`/api/routes/${id}`, "Falha ao excluir rota", { method: "DELETE" }));
 }
 
 export function useAddStop() {
@@ -55,13 +53,13 @@ export function useAddStop() {
     api<StopRecord>(`/api/routes/${routeId}/stops`, "Falha ao adicionar parada", {
       method: "POST",
       body: data,
-    })
+    }),
   );
 }
 
 export function useRemoveStop() {
   return useRouteMutation(({ routeId, stopId }: { routeId: string; stopId: string }) =>
-    api(`/api/routes/${routeId}/stops/${stopId}`, "Falha ao remover parada", { method: "DELETE" })
+    api(`/api/routes/${routeId}/stops/${stopId}`, "Falha ao remover parada", { method: "DELETE" }),
   );
 }
 
@@ -72,7 +70,7 @@ export function useRemoveStop() {
  */
 function useOptimisticRouteMutation<TInput>(
   mutationFn: (input: TInput) => Promise<unknown>,
-  apply: (routes: RouteRecord[], input: TInput) => RouteRecord[]
+  apply: (routes: RouteRecord[], input: TInput) => RouteRecord[],
 ) {
   const qc = useQueryClient();
   return useMutation({
@@ -107,10 +105,10 @@ export function useMarkStopVisited() {
                 // o cache vem de JSON, então datas são strings (como no retorno da API)
                 s.id === stopId
                   ? { ...s, visitedAt: visited ? (new Date().toISOString() as unknown as Date) : null }
-                  : s
+                  : s,
               ),
-            }
-      )
+            },
+      ),
   );
 }
 
@@ -130,6 +128,6 @@ export function useReorderStops() {
           return stop ? [{ ...stop, order }] : [];
         });
         return { ...r, stops: reordered };
-      })
+      }),
   );
 }
