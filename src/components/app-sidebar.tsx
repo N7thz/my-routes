@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { LogOutIcon, ChevronsUpDownIcon } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -23,7 +23,7 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
-import { signOut } from "@/lib/auth-client";
+import { useSignOut } from "@/hooks/use-sign-out";
 import { getInitials } from "@/lib/utils";
 import { navItems } from "@/components/nav-items";
 
@@ -36,12 +36,7 @@ type User = {
 
 export function AppSidebar({ user }: { user?: User | null }) {
   const pathname = usePathname();
-  const router = useRouter();
-
-  async function handleSignOut() {
-    await signOut();
-    router.push("/login");
-  }
+  const handleSignOut = useSignOut();
 
   return (
     <Sidebar variant="floating" collapsible="icon">
@@ -91,7 +86,7 @@ export function AppSidebar({ user }: { user?: User | null }) {
                 <SidebarMenuButton
                   size="lg"
                   tooltip={user?.name ?? "Usuário"}
-                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                  className="data-open:bg-sidebar-accent data-open:text-sidebar-accent-foreground"
                 >
                   <Avatar className="size-8 shrink-0">
                     <AvatarImage src={user?.image ?? ""} alt={user?.name ?? ""} />
