@@ -65,39 +65,22 @@ export function useRemoveStop() {
   );
 }
 
-export function useMarkStopVisited() {
-  return useRouteMutation(
-    ({ routeId, stopId, visited }: { routeId: string; stopId: string; visited: boolean }) =>
-      api<StopRecord>(`/api/routes/${routeId}/stops/${stopId}`, "Falha ao atualizar parada", {
-        method: "PATCH",
-        body: { visited },
-      })
-  );
-}
-
-export function useReorderStops() {
+/**
+ * Mutação otimista: `apply` atualiza o cache `[routes]` na hora, o snapshot é
+ * restaurado em caso de erro e a lista é recarregada ao final. As mutações
+ * pausadas offline são retomadas em providers.tsx.
+ */
+function useOptimisticRouteMutation<TInput>(
+  mutationFn: (input: TInput) => Promise<unknown>,
+  apply: (routes: RouteRecord[], input: TInput) => RouteRecord[]
+) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ routeId, orderedIds }: { routeId: string; orderedIds: string[] }) =>
-      api(`/api/routes/${routeId}/stops`, "Falha ao reordenar paradas", {
-        method: "PATCH",
-        body: { orderedIds },
-      }),
-    // Otimista: arrastar uma parada tem que responder na hora, sem esperar a rede.
-    onMutate: async ({ routeId, orderedIds }) => {
+    mutationFn,
+    onMutate: async (input: TInput) => {
       await qc.cancelQueries({ queryKey: ROUTES_KEY });
       const prev = qc.getQueryData<RouteRecord[]>(ROUTES_KEY);
-      qc.setQueryData<RouteRecord[]>(ROUTES_KEY, (old) =>
-        old?.map((r) => {
-          if (r.id !== routeId) return r;
-          const byId = new Map(r.stops.map((s) => [s.id, s]));
-          const reordered = orderedIds.flatMap((id, order) => {
-            const stop = byId.get(id);
-            return stop ? [{ ...stop, order }] : [];
-          });
-          return { ...r, stops: reordered };
-        })
-      );
+      qc.setQueryData<RouteRecord[]>(ROUTES_KEY, (old) => (old ? apply(old, input) : old));
       return { prev };
     },
     onError: (_e, _v, ctx) => {
@@ -105,4 +88,48 @@ export function useReorderStops() {
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ROUTES_KEY }),
   });
+}
+
+export function useMarkStopVisited() {
+  return useOptimisticRouteMutation(
+    ({ routeId, stopId, visited }: { routeId: string; stopId: string; visited: boolean }) =>
+      api<StopRecord>(`/api/routes/${routeId}/stops/${stopId}`, "Falha ao atualizar parada", {
+        method: "PATCH",
+        body: { visited },
+      }),
+    (routes, { routeId, stopId, visited }) =>
+      routes.map((r) =>
+        r.id !== routeId
+          ? r
+          : {
+              ...r,
+              stops: r.stops.map((s) =>
+                // o cache vem de JSON, então datas são strings (como no retorno da API)
+                s.id === stopId
+                  ? { ...s, visitedAt: visited ? (new Date().toISOString() as unknown as Date) : null }
+                  : s
+              ),
+            }
+      )
+  );
+}
+
+export function useReorderStops() {
+  return useOptimisticRouteMutation(
+    ({ routeId, orderedIds }: { routeId: string; orderedIds: string[] }) =>
+      api(`/api/routes/${routeId}/stops`, "Falha ao reordenar paradas", {
+        method: "PATCH",
+        body: { orderedIds },
+      }),
+    (routes, { routeId, orderedIds }) =>
+      routes.map((r) => {
+        if (r.id !== routeId) return r;
+        const byId = new Map(r.stops.map((s) => [s.id, s]));
+        const reordered = orderedIds.flatMap((id, order) => {
+          const stop = byId.get(id);
+          return stop ? [{ ...stop, order }] : [];
+        });
+        return { ...r, stops: reordered };
+      })
+  );
 }
