@@ -1,7 +1,13 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { getNotionClient } from "@/lib/notion-auth";
 import { listCompanies, importFromNotion } from "@/lib/company-service";
 import { CompaniesView } from "@/components/companies/companies-view";
+
+export const metadata: Metadata = {
+  title: "Empresas",
+  description: "Empresas atendidas, com status, endereço, grupos e página no Notion.",
+};
 
 export default async function EmpresasPage() {
   const existing = await listCompanies();

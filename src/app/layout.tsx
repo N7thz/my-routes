@@ -13,11 +13,30 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const APP_NAME = "My Routes";
+const APP_DESCRIPTION =
+  "Planeje e acompanhe suas visitas a empresas: rotas do dia otimizadas, mapa com GPS e integração com Runrunit, Notion e Google Agenda.";
+
 export const metadata: Metadata = {
-  title: "My Routes",
-  description: "My Routes application",
+  // Fora de produção a URL vem da requisição; o fallback só evita o aviso do Next.
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
+  title: {
+    template: `%s · ${APP_NAME}`,
+    default: APP_NAME,
+  },
+  description: APP_DESCRIPTION,
   manifest: "/manifest.webmanifest",
-  applicationName: "My Routes",
+  applicationName: APP_NAME,
+  // App pessoal atrás de login: nada para buscadores indexarem.
+  robots: { index: false, follow: false },
+  formatDetection: { telephone: false, address: false, email: false },
+  openGraph: {
+    type: "website",
+    locale: "pt_BR",
+    siteName: APP_NAME,
+    title: APP_NAME,
+    description: APP_DESCRIPTION,
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",

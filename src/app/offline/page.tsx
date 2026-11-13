@@ -1,6 +1,7 @@
+import type { Metadata } from "next";
 import { WifiOffIcon } from "lucide-react";
 
-export const metadata = { title: "Offline — My Routes" };
+export const metadata: Metadata = { title: "Sem conexão" };
 
 export default function OfflinePage() {
   return (
