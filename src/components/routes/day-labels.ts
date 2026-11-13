@@ -1,5 +1,5 @@
 import { dateFromKey, todayKey } from "@/lib/dates";
-import type { RouteStatus, StopRecord } from "@/lib/route-service";
+import type { RouteStatus } from "@/lib/route-service";
 
 /** Chave do "dia" que agrupa as rotas sem data. */
 export const UNDATED = "__undated__";
@@ -50,9 +50,4 @@ export function fullDayLabel(key: string): string {
 
 export function visitedTimeLabel(dt: Date | string): string {
   return new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" }).format(new Date(dt));
-}
-
-export function mapsUrl(stops: StopRecord[]): string {
-  const addrs = stops.map((s) => encodeURIComponent(s.address));
-  return `https://www.google.com/maps/dir/${addrs.join("/")}`;
 }

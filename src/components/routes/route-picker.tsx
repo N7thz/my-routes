@@ -73,6 +73,7 @@ export function RoutePicker({
                 </p>
                 {s.items.map((r) => (
                   <button
+                    type="button"
                     key={r.id}
                     onClick={() => pick(r)}
                     className={cn(

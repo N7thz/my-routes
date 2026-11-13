@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRoutes } from "@/hooks/use-routes";
+import { ROUTES_LOOKBACK_DAYS } from "@/lib/dates";
 import type { RouteRecord } from "@/lib/route-service";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -15,7 +16,9 @@ import { RouteCard } from "@/components/routes/route-card";
 import { RouteSheet } from "@/components/routes/route-sheet";
 
 export function RoutesView() {
-  const { data: routes, isLoading } = useRoutes();
+  // Por padrão só os últimos 60 dias; o histórico inteiro vem sob demanda.
+  const [showOlder, setShowOlder] = useState(false);
+  const { data: routes, isLoading, isFetching } = useRoutes(showOlder ? { from: "2000-01-01" } : undefined);
   const [creating, setCreating] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [selectedRoute, setSelectedRoute] = useState<RouteRecord | null>(null);
@@ -30,8 +33,8 @@ export function RoutesView() {
           <Skeleton className="h-9 w-32 ml-auto" />
         </div>
         <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-48 rounded-lg" />
+          {Array.from({ length: 4 }, (_, i) => `skeleton-${i}`).map((key) => (
+            <Skeleton key={key} className="h-48 rounded-lg" />
           ))}
         </div>
       </div>
@@ -100,6 +103,15 @@ export function RoutesView() {
               />
             ))}
           </div>
+        )}
+
+        {!showOlder && (
+          <Button variant="ghost" size="sm" className="self-center" onClick={() => setShowOlder(true)}>
+            Mostrar rotas com mais de {ROUTES_LOOKBACK_DAYS} dias
+          </Button>
+        )}
+        {showOlder && isFetching && (
+          <p className="self-center text-xs text-muted-foreground">Carregando histórico…</p>
         )}
       </div>
     </>

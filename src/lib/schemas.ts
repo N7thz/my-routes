@@ -61,6 +61,11 @@ export const routeUpdateSchema = z.object({
 
 export const routeGenerateSchema = z.object({ date: dayKey });
 
+/** Janela da lista de rotas (?from=&to=), dias inclusivos. */
+export const routeRangeSchema = z
+  .object({ from: dayKey.optional(), to: dayKey.optional() })
+  .refine((r) => !r.from || !r.to || r.from <= r.to, "from depois de to");
+
 export const stopCreateSchema = z.object({
   companyId: z.string().nullish(),
   label: optionalText,

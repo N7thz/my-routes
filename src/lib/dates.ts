@@ -30,6 +30,21 @@ export function nextDayKey(key: string): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** Dia AAAA-MM-DD deslocado em `days` (negativo = para trás). */
+export function shiftDayKey(key: string, days: number): string {
+  const d = new Date(`${key}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Quantos dias para trás a lista de rotas traz quando nenhuma janela é pedida. */
+export const ROUTES_LOOKBACK_DAYS = 60;
+
+/** Primeiro dia da janela padrão da lista de rotas. */
+export function defaultRoutesFrom(): string {
+  return shiftDayKey(todayKey(), -ROUTES_LOOKBACK_DAYS);
+}
+
 /** Intervalo [00:00, 24:00) UTC do dia, para consultar colunas "só dia". */
 export function dayRange(key: string): { start: Date; end: Date } {
   return {

@@ -30,30 +30,32 @@ export function RouteCard({
   const visited = route.stops.filter((s) => s.visitedAt).length;
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={onClick}
-      onKeyDown={(e) => {
-        if ((e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) {
-          e.preventDefault();
-          onClick();
-        }
-      }}
-      className="w-full cursor-pointer text-left rounded-lg border bg-card hover:bg-muted/30 transition-colors p-4 flex flex-col gap-3"
-    >
+    // Botão transparente cobre o card (abre a rota); o menu fica por cima dele.
+    <div className="relative w-full text-left rounded-lg border bg-card hover:bg-muted/30 focus-within:bg-muted/30 transition-colors p-4 flex flex-col gap-3">
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={`Abrir rota ${route.name}`}
+        className="absolute inset-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      />
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <RouteIcon className="size-4 text-muted-foreground shrink-0" />
           <span className="font-semibold text-sm leading-snug line-clamp-2">{route.name}</span>
         </div>
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="relative z-10 flex items-center gap-1 shrink-0">
           <Badge variant={cfg.variant} className={cn("text-xs", cfg.className)}>
             {cfg.label}
           </Badge>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="size-6" onClick={(e) => e.stopPropagation()}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-6"
+                aria-label={`Ações da rota ${route.name}`}
+                onClick={(e) => e.stopPropagation()}
+              >
                 <MoreHorizontalIcon className="size-3.5" />
               </Button>
             </DropdownMenuTrigger>
@@ -84,7 +86,7 @@ export function RouteCard({
         </div>
         {route.stops.length > 0 && (
           <div className="flex flex-col items-center">
-            <span className="text-xl font-bold tabular-nums text-emerald-500">{visited}</span>
+            <span className="text-xl font-bold tabular-nums text-emerald-700 dark:text-emerald-500">{visited}</span>
             <span className="text-xs text-muted-foreground">visitadas</span>
           </div>
         )}

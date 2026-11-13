@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { googleMapsRouteUrl } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 import { formatDate } from "@/lib/dates";
 import { useRemoveStop, useMarkStopVisited, useReorderStops } from "@/hooks/use-routes";
@@ -47,6 +48,7 @@ export function StopRow({
     <div className={cn("flex items-start gap-2 py-3 px-1 rounded-md transition-colors group", visited && "opacity-60")}>
       <div className="-my-0.5 flex shrink-0 flex-col">
         <button
+          type="button"
           onClick={() => onMove(index, -1)}
           disabled={index === 0}
           title="Mover para cima"
@@ -55,6 +57,7 @@ export function StopRow({
           <ChevronUpIcon className="size-4" />
         </button>
         <button
+          type="button"
           onClick={() => onMove(index, 1)}
           disabled={index === total - 1}
           title="Mover para baixo"
@@ -64,11 +67,12 @@ export function StopRow({
         </button>
       </div>
       <button
+        type="button"
         onClick={() => markVisited.mutate({ routeId, stopId: stop.id, visited: !visited })}
         className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground transition-colors"
         title={visited ? "Marcar como não visitada" : "Marcar como visitada"}
       >
-        {visited ? <CheckCircle2Icon className="size-4 text-emerald-500" /> : <CircleIcon className="size-4" />}
+        {visited ? <CheckCircle2Icon className="size-4 text-emerald-600 dark:text-emerald-500" /> : <CircleIcon className="size-4" />}
       </button>
       <div className="flex-1 min-w-0">
         <p className={cn("text-sm font-medium leading-snug", visited && "line-through")}>
@@ -86,6 +90,7 @@ export function StopRow({
         )}
       </div>
       <button
+        type="button"
         onClick={() => remove.mutate({ routeId, stopId: stop.id })}
         className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
         title="Remover parada"
@@ -205,8 +210,10 @@ export function RouteSheet({
                   variant="outline"
                   className="w-full gap-2"
                   onClick={() => {
-                    const addresses = route.stops.map((s) => encodeURIComponent(s.address)).join("/");
-                    window.open(`https://www.google.com/maps/dir/${addresses}`, "_blank");
+                    // Só o que falta visitar (ou tudo, se já terminou), saindo da posição atual.
+                    const pending = route.stops.filter((s) => !s.visitedAt && s.address);
+                    const url = googleMapsRouteUrl(pending.length > 0 ? pending : route.stops);
+                    if (url) window.open(url, "_blank", "noopener,noreferrer");
                   }}
                 >
                   <NavigationIcon className="size-4" />

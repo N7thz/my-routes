@@ -1,15 +1,45 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
-import type { RouteRecord, RouteCreateInput, RouteUpdateInput, StopCreateInput, StopRecord } from "@/lib/route-service";
+import type {
+  RouteDay,
+  RouteRange,
+  RouteRecord,
+  RouteCreateInput,
+  RouteUpdateInput,
+  StopCreateInput,
+  StopRecord,
+} from "@/lib/route-service";
 
-export type { RouteRecord };
+export type { RouteDay, RouteRange, RouteRecord };
 
+/** Prefixo de tudo que é rota no cache: invalidar ele recarrega listas e dias. */
 export const ROUTES_KEY = ["routes"] as const;
+/** Prefixo só das listas de rotas (uma entrada por janela de datas). */
+const ROUTE_LISTS_KEY = ["routes", "list"] as const;
 
-export function useRoutes() {
+/**
+ * Rotas numa janela de datas (AAAA-MM-DD, inclusiva), sempre com as sem data.
+ * Sem janela: dos últimos 60 dias em diante — o servidor não manda o histórico
+ * inteiro a cada carregamento.
+ */
+export function useRoutes(range?: RouteRange) {
+  const query = new URLSearchParams(
+    Object.entries(range ?? {}).filter((e): e is [string, string] => !!e[1]),
+  ).toString();
   return useQuery({
-    queryKey: ROUTES_KEY,
-    queryFn: () => api<RouteRecord[]>("/api/routes", "Falha ao carregar rotas"),
+    queryKey: [...ROUTE_LISTS_KEY, query],
+    queryFn: () => api<RouteRecord[]>(`/api/routes${query ? `?${query}` : ""}`, "Falha ao carregar rotas"),
+    staleTime: 2 * 60 * 1000,
+    // Ao trocar de janela, mantém a anterior na tela até a nova chegar.
+    placeholderData: (prev) => prev,
+  });
+}
+
+/** Todos os dias com rota (null = sem data), para navegar sem baixar as rotas. */
+export function useRouteDays() {
+  return useQuery({
+    queryKey: [...ROUTES_KEY, "days"],
+    queryFn: () => api<RouteDay[]>("/api/routes/days", "Falha ao carregar dias com rota"),
     staleTime: 2 * 60 * 1000,
   });
 }
@@ -64,8 +94,8 @@ export function useRemoveStop() {
 }
 
 /**
- * Mutação otimista: `apply` atualiza o cache `[routes]` na hora, o snapshot é
- * restaurado em caso de erro e a lista é recarregada ao final. As mutações
+ * Mutação otimista: `apply` atualiza na hora todas as listas de rotas em cache, o snapshot é
+ * restaurado em caso de erro e as listas são recarregadas ao final. As mutações
  * pausadas offline são retomadas em providers.tsx.
  */
 function useOptimisticRouteMutation<TInput>(
@@ -76,13 +106,16 @@ function useOptimisticRouteMutation<TInput>(
   return useMutation({
     mutationFn,
     onMutate: async (input: TInput) => {
-      await qc.cancelQueries({ queryKey: ROUTES_KEY });
-      const prev = qc.getQueryData<RouteRecord[]>(ROUTES_KEY);
-      qc.setQueryData<RouteRecord[]>(ROUTES_KEY, (old) => (old ? apply(old, input) : old));
+      await qc.cancelQueries({ queryKey: ROUTE_LISTS_KEY });
+      // Cada janela carregada é uma entrada no cache: todas recebem a mudança.
+      const prev = qc.getQueriesData<RouteRecord[]>({ queryKey: ROUTE_LISTS_KEY });
+      qc.setQueriesData<RouteRecord[]>({ queryKey: ROUTE_LISTS_KEY }, (old) =>
+        old ? apply(old, input) : old,
+      );
       return { prev };
     },
     onError: (_e, _v, ctx) => {
-      if (ctx?.prev) qc.setQueryData(ROUTES_KEY, ctx.prev);
+      for (const [key, data] of ctx?.prev ?? []) qc.setQueryData(key, data);
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ROUTES_KEY }),
   });

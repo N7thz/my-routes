@@ -48,7 +48,7 @@ export function RouteTitle({
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button className="shrink-0 focus:outline-none">
+          <button type="button" className="shrink-0 focus:outline-none">
             <Badge
               className={cn(
                 "cursor-pointer gap-1 pr-1.5 text-xs font-medium transition-opacity hover:opacity-80",

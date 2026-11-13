@@ -19,6 +19,8 @@ import {
   Trash2Icon,
   RouteIcon,
   NotebookPenIcon,
+  MapPinIcon,
+  MapPinOffIcon,
   Loader2Icon,
 } from "lucide-react";
 import { useCreateNotionPage } from "@/hooks/use-companies";
@@ -159,6 +161,20 @@ export function CompanySheet({
         <Separator />
 
         <div className="py-3 flex flex-col gap-2 px-1">
+          {company.address && (
+            <div className="flex items-start gap-2 text-sm">
+              <MapPinIcon className="size-3.5 text-muted-foreground shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <span>{company.address}</span>
+                {company.geocodeFailedAt && (
+                  <p className="mt-0.5 flex items-center gap-1 text-xs text-amber-700 dark:text-amber-400">
+                    <MapPinOffIcon className="size-3 shrink-0" />
+                    Endereço não encontrado no mapa — edite para corrigir.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
           {company.cnpj && (
             <div className="flex items-center gap-2 text-sm">
               <HashIcon className="size-3.5 text-muted-foreground shrink-0" />
@@ -213,6 +229,7 @@ export function CompanySheet({
                 const estimate = formatEstimate(task.current_estimate_seconds);
                 return (
                   <button
+                    type="button"
                     key={task.id}
                     onClick={() => onTaskClick(task)}
                     className="w-full text-left flex gap-3 items-start px-1 py-2.5 hover:bg-muted/50 rounded-md transition-colors"

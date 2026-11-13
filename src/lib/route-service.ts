@@ -7,7 +7,7 @@ import { stopFromCompany, type DayCompany } from "@/lib/route-sync-match";
 export { stopFromCompany, type DayCompany };
 import { requireUserId } from "@/lib/session";
 import { HttpError, NotFoundError } from "@/lib/http-errors";
-import { dayRange, formatDate } from "@/lib/dates";
+import { dayRange, defaultRoutesFrom, formatDate } from "@/lib/dates";
 import type { RouteStatus } from "../../prisma/generated/enums";
 
 export type { RouteStatus };
@@ -21,6 +21,8 @@ export type StopRecord = {
   address: string;
   lat: number | null;
   lng: number | null;
+  /** Endereço que o geocodificador não encontrou (fica fora do mapa). */
+  geocodeFailedAt: Date | null;
   order: number;
   visitedAt: Date | null;
   createdAt: Date;
@@ -64,13 +66,56 @@ export function dayRouteName(day: string, detail?: string): string {
 }
 
 
-export async function listRoutes(): Promise<RouteRecord[]> {
+export type RouteRange = { from?: string; to?: string };
+
+/** Dia AAAA-MM-DD deslocado em `days` (negativo = para trás). */
+export function shiftDayKey(day: string, days: number): string {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Rotas do usuário dentro da janela [from, to] (dias AAAA-MM-DD), sempre com
+ * as sem data. Sem `from`, vai até ROUTES_LOOKBACK_DAYS atrás — o
+ * histórico antigo só é lido quando a tela navega até ele.
+ */
+export async function listRoutes(range: RouteRange = {}): Promise<RouteRecord[]> {
   const userId = await requireUserId();
+  const from = range.from ?? defaultRoutesFrom();
   return prisma.route.findMany({
-    where: { userId },
+    where: {
+      userId,
+      OR: [
+        { date: null },
+        {
+          date: {
+            gte: dayRange(from).start,
+            ...(range.to && { lt: dayRange(range.to).end }),
+          },
+        },
+      ],
+    },
     orderBy: [{ date: "desc" }, { createdAt: "desc" }],
     ...routeInclude,
   });
+}
+
+export type RouteDay = { day: string | null; count: number };
+
+/** Todos os dias que têm rota (null = sem data), leve: só para navegar entre dias. */
+export async function listRouteDays(): Promise<RouteDay[]> {
+  const userId = await requireUserId();
+  const groups = await prisma.route.groupBy({
+    by: ["date"],
+    where: { userId },
+    _count: { _all: true },
+    orderBy: { date: "asc" },
+  });
+  return groups.map((g) => ({
+    day: g.date ? g.date.toISOString().slice(0, 10) : null,
+    count: g._count._all,
+  }));
 }
 
 export async function getRoute(id: string): Promise<RouteRecord | null> {

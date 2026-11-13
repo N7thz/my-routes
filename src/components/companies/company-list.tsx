@@ -28,6 +28,7 @@ import {
   PencilIcon,
   Trash2Icon,
   MapPinIcon,
+  MapPinOffIcon,
   RouteIcon,
   CheckIcon,
   FoldersIcon,
@@ -45,12 +46,12 @@ function QuickStatusMenu({ company }: { company: EnrichedCompany }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <div
-          role="button"
-          tabIndex={0}
+        <button
+          type="button"
           onClick={(e) => e.stopPropagation()}
           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") e.stopPropagation(); }}
-          className="focus:outline-none"
+          aria-label={`Status de ${company.name}: ${statusCfg?.label ?? "sem status"}`}
+          className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {statusCfg ? (
             <Badge variant={statusCfg.variant} className={cn("text-xs cursor-pointer hover:opacity-75 transition-opacity", statusCfg.className)}>
@@ -61,7 +62,7 @@ function QuickStatusMenu({ company }: { company: EnrichedCompany }) {
               Sem status
             </Badge>
           )}
-        </div>
+        </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" onClick={(e) => e.stopPropagation()}>
         {(Object.entries(STATUS_CONFIG) as [CompanyStatus, typeof STATUS_CONFIG[CompanyStatus]][]).map(([key, cfg]) => (
@@ -150,15 +151,15 @@ function CompanyActionsMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <div
-          role="button"
-          tabIndex={0}
+        <button
+          type="button"
           onClick={(e) => e.stopPropagation()}
           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") e.stopPropagation(); }}
+          aria-label={`Ações de ${company.name}`}
           className="inline-flex items-center justify-center size-6 shrink-0 rounded-md hover:bg-accent transition-colors"
         >
           <MoreHorizontalIcon className="size-3.5" />
-        </div>
+        </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem
@@ -199,16 +200,21 @@ export function CompanyCard({
   onAddToRoute: (c: EnrichedCompany) => void;
 }) {
   return (
-    <button
-      onClick={onClick}
-      className="w-full h-full text-left rounded-lg border bg-gradient-to-br from-card to-primary/[0.18] hover:to-primary/[0.28] transition-colors p-4 flex flex-col gap-3"
-    >
+    // Card clicável com menus dentro: um botão transparente cobre o card (abre a
+    // empresa) e os menus ficam por cima — sem botão dentro de botão.
+    <div className="relative w-full h-full text-left rounded-lg border bg-gradient-to-br from-card to-primary/[0.18] hover:to-primary/[0.28] focus-within:to-primary/[0.28] transition-colors p-4 flex flex-col gap-3">
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={`Abrir ${company.name}`}
+        className="absolute inset-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      />
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <BuildingIcon className="size-4 text-muted-foreground shrink-0" />
           <span className="font-semibold text-sm leading-snug line-clamp-2">{company.name}</span>
         </div>
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="relative z-10 flex items-center gap-1 shrink-0">
           <QuickStatusMenu company={company} />
           <CompanyActionsMenu company={company} onEdit={onEdit} onDelete={onDelete} onAddToRoute={onAddToRoute} />
         </div>
@@ -223,7 +229,14 @@ export function CompanyCard({
           )}
           {company.address && (
             <p className="text-xs text-muted-foreground flex items-start gap-1">
-              <MapPinIcon className="size-3 shrink-0 mt-0.5" />
+              {company.geocodeFailedAt ? (
+                <MapPinOffIcon
+                  className="size-3 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400"
+                  aria-label="Endereço não encontrado no mapa"
+                />
+              ) : (
+                <MapPinIcon className="size-3 shrink-0 mt-0.5" />
+              )}
               <span className="line-clamp-2">{company.address}</span>
             </p>
           )}
@@ -246,7 +259,7 @@ export function CompanyCard({
           )}
         </div>
       )}
-    </button>
+    </div>
   );
 }
 
@@ -258,6 +271,7 @@ function SortHeader({
   const active = current === sortKey;
   return (
     <button
+      type="button"
       onClick={() => onSort(sortKey)}
       className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
     >
@@ -327,11 +341,20 @@ export function CompanyTable({
                 className="border-b last:border-0 hover:bg-muted/40 cursor-pointer transition-colors"
               >
                 <td className="px-4 py-3 font-medium">
-                  <div className="flex items-center gap-2">
+                  {/* A linha inteira abre no clique; o botão no nome é o caminho pelo teclado. */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onCompanyClick(company);
+                    }}
+                    className="flex items-center gap-2 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
                     <BuildingIcon className="size-3.5 text-muted-foreground shrink-0" />
                     {company.name}
-                  </div>
+                  </button>
                 </td>
+                {/* biome-ignore lint/a11y/useKeyWithClickEvents: só barra o clique de chegar na linha; a interação é do menu dentro. */}
                 <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                   <QuickStatusMenu company={company} />
                 </td>
@@ -347,10 +370,10 @@ export function CompanyTable({
                   <span className={
                     company.openCount > 0
                       ? company.urgentCount > 0
-                        ? "text-red-500 font-semibold"
+                        ? "text-red-600 dark:text-red-500 font-semibold"
                         : company.overdueCount > 0
-                        ? "text-orange-500 font-semibold"
-                        : "text-emerald-500 font-semibold"
+                        ? "text-orange-700 dark:text-orange-500 font-semibold"
+                        : "text-emerald-700 dark:text-emerald-500 font-semibold"
                       : "text-muted-foreground"
                   }>
                     {company.openCount}
@@ -358,12 +381,12 @@ export function CompanyTable({
                 </td>
                 <td className="px-4 py-3 text-right tabular-nums">
                   {company.urgentCount > 0
-                    ? <span className="text-red-500 font-semibold">{company.urgentCount}</span>
+                    ? <span className="text-red-600 dark:text-red-500 font-semibold">{company.urgentCount}</span>
                     : <span className="text-muted-foreground">—</span>}
                 </td>
                 <td className="px-4 py-3 text-right tabular-nums">
                   {company.overdueCount > 0
-                    ? <span className="text-orange-500 font-semibold">{company.overdueCount}</span>
+                    ? <span className="text-orange-700 dark:text-orange-500 font-semibold">{company.overdueCount}</span>
                     : <span className="text-muted-foreground">—</span>}
                 </td>
                 <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
@@ -381,6 +404,7 @@ export function CompanyTable({
                     <span className="text-xs text-muted-foreground">—</span>
                   )}
                 </td>
+                {/* biome-ignore lint/a11y/useKeyWithClickEvents: só barra o clique de chegar na linha; a interação é do menu dentro. */}
                 <td className="px-2 py-3" onClick={(e) => e.stopPropagation()}>
                   <CompanyActionsMenu company={company} onEdit={onEdit} onDelete={onDelete} onAddToRoute={onAddToRoute} />
                 </td>

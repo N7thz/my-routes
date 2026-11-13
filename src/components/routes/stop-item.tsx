@@ -2,7 +2,9 @@
 
 import { cn } from "@/lib/utils";
 import type { StopRecord } from "@/lib/route-service";
-import { CheckIcon, ChevronDownIcon, ChevronUpIcon, Loader2Icon } from "lucide-react";
+import { CheckIcon, ChevronDownIcon, ChevronUpIcon, Loader2Icon, MapPinOffIcon, NavigationIcon } from "lucide-react";
+import { navUrl, type NavApp } from "@/lib/navigation";
+import { usePreferredNavApp } from "@/hooks/use-nav-app";
 import { visitedTimeLabel } from "./day-labels";
 
 export function StopItem({
@@ -23,11 +25,14 @@ export function StopItem({
   onMove: (dir: -1 | 1) => void;
 }) {
   const visited = !!stop.visitedAt;
+  const [navApp, setNavApp] = usePreferredNavApp();
+  const stopName = stop.label ?? stop.company?.name ?? `Parada ${index + 1}`;
 
   return (
     <div className="flex gap-3 px-4">
       <div className="flex shrink-0 flex-col items-center">
         <button
+          type="button"
           onClick={onToggle}
           disabled={isLoading}
           title={visited ? "Marcar como não visitada" : "Marcar como visitada"}
@@ -59,21 +64,47 @@ export function StopItem({
           </span>
         )}
         <p className={cn("text-sm font-medium leading-snug", visited && "text-muted-foreground line-through")}>
-          {stop.label ?? stop.company?.name ?? `Parada ${index + 1}`}
+          {stopName}
         </p>
         {stop.company && stop.label && stop.label !== stop.company.name && (
           <p className="text-xs text-muted-foreground leading-tight">{stop.company.name}</p>
         )}
         <p className="mt-0.5 line-clamp-2 text-xs leading-tight text-muted-foreground">{stop.address}</p>
+        {stop.geocodeFailedAt && stop.lat == null && (
+          <p className="mt-0.5 flex items-center gap-1 text-xs text-amber-700 dark:text-amber-400">
+            <MapPinOffIcon className="size-3 shrink-0" />
+            Endereço não localizado no mapa
+          </p>
+        )}
         {visited && stop.visitedAt && (
-          <p className="mt-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+          <p className="mt-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">
             Visitada às {visitedTimeLabel(stop.visitedAt)}
           </p>
+        )}
+        {isCurrent && !visited && stop.address && (
+          <div className="mt-2 flex gap-2">
+            <NavLink app="google" stop={stop} preferred={navApp === "google"} onPick={setNavApp} />
+            <NavLink app="waze" stop={stop} preferred={navApp === "waze"} onPick={setNavApp} />
+          </div>
         )}
       </div>
 
       <div className="flex shrink-0 flex-col justify-center gap-0.5 pt-1">
+        {!isCurrent && !visited && stop.address && (
+          <a
+            href={navUrl(navApp, stop)}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`Navegar até ${stopName} pelo ${NAV_LABEL[navApp]}`}
+            title={`Navegar pelo ${NAV_LABEL[navApp]}`}
+            className="mb-1 text-muted-foreground transition-colors hover:text-primary"
+          >
+            <NavigationIcon className="size-4" />
+          </a>
+        )}
         <button
+          type="button"
+          aria-label="Mover para cima"
           onClick={() => onMove(-1)}
           disabled={index === 0}
           title="Mover para cima"
@@ -82,6 +113,8 @@ export function StopItem({
           <ChevronUpIcon className="size-4" />
         </button>
         <button
+          type="button"
+          aria-label="Mover para baixo"
           onClick={() => onMove(1)}
           disabled={isLast}
           title="Mover para baixo"
@@ -91,5 +124,38 @@ export function StopItem({
         </button>
       </div>
     </div>
+  );
+}
+
+const NAV_LABEL: Record<NavApp, string> = { google: "Google Maps", waze: "Waze" };
+
+/** Botão de navegação da próxima parada; usar um deles vira a preferência. */
+function NavLink({
+  app,
+  stop,
+  preferred,
+  onPick,
+}: {
+  app: NavApp;
+  stop: StopRecord;
+  preferred: boolean;
+  onPick: (app: NavApp) => void;
+}) {
+  return (
+    <a
+      href={navUrl(app, stop)}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={() => onPick(app)}
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors",
+        preferred
+          ? "border-primary bg-primary text-primary-foreground hover:bg-primary/90"
+          : "hover:bg-muted",
+      )}
+    >
+      <NavigationIcon className="size-3.5" />
+      {NAV_LABEL[app]}
+    </a>
   );
 }

@@ -18,7 +18,7 @@ export function QuickRouteStatus({ route }: { route: RouteRecord }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="focus:outline-none" onClick={(e) => e.stopPropagation()}>
+        <button type="button" className="focus:outline-none" onClick={(e) => e.stopPropagation()}>
           <Badge
             variant={cfg.variant}
             className={cn("text-xs cursor-pointer hover:opacity-75 transition-opacity", cfg.className)}

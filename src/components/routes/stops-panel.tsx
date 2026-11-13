@@ -3,7 +3,7 @@
 import { cn } from "@/lib/utils";
 import type { RouteRecord } from "@/lib/route-service";
 import { ExternalLinkIcon } from "lucide-react";
-import { mapsUrl } from "./day-labels";
+import { googleMapsRouteUrl, MAX_GOOGLE_WAYPOINTS } from "@/lib/navigation";
 import { StopItem } from "./stop-item";
 
 export function ProgressBar({ progress, className }: { progress: number; className?: string }) {
@@ -35,6 +35,8 @@ export function StopsPanel({
   const visitedCount = route.stops.filter((s) => s.visitedAt).length;
   const progress = totalCount > 0 ? (visitedCount / totalCount) * 100 : 0;
   const firstUnvisitedIndex = route.stops.findIndex((s) => !s.visitedAt);
+  const remaining = route.stops.filter((s) => !s.visitedAt && s.address);
+  const routeUrl = googleMapsRouteUrl(remaining);
 
   return (
     <div className={cn("flex w-80 shrink-0 flex-col border-r", "sm:flex", visibleOnMobile ? "flex" : "hidden")}>
@@ -76,15 +78,19 @@ export function StopsPanel({
             </span>
           </div>
 
-          <a
-            href={mapsUrl(route.stops)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex w-full items-center justify-center gap-1.5 rounded-md border px-3 py-2 text-xs font-medium transition-colors hover:bg-muted"
-          >
-            <ExternalLinkIcon className="size-3" />
-            Abrir rota no Google Maps
-          </a>
+          {routeUrl && (
+            <a
+              href={routeUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex w-full items-center justify-center gap-1.5 rounded-md border px-3 py-2 text-xs font-medium transition-colors hover:bg-muted"
+            >
+              <ExternalLinkIcon className="size-3" />
+              {remaining.length > MAX_GOOGLE_WAYPOINTS + 1
+                ? `Próximas ${MAX_GOOGLE_WAYPOINTS + 1} paradas no Google Maps`
+                : "Paradas restantes no Google Maps"}
+            </a>
+          )}
         </div>
       )}
     </div>

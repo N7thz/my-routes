@@ -29,6 +29,8 @@ export type CompanyRecord = {
   observations: string | null;
   notionId: string | null;
   groupId: string | null;
+  /** Endereço que o geocodificador não encontrou (fica fora do mapa). */
+  geocodeFailedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -89,7 +91,7 @@ export async function updateCompany(id: string, data: CompanyUpdateInput): Promi
       ...(data.groupId !== undefined && { groupId: data.groupId }),
       ...(data.date !== undefined && { date: data.date ? new Date(data.date) : null }),
       // Endereço novo invalida as coordenadas antigas; o geocode roda depois da resposta.
-      ...(addressChanged && { lat: null, lng: null }),
+      ...(addressChanged && { lat: null, lng: null, geocodeFailedAt: null }),
     },
   });
   if (addressChanged && data.address) after(() => geocodeCompany(id));

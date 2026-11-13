@@ -230,8 +230,8 @@ export function CompaniesView() {
           <Skeleton className="h-9 w-40" />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <Skeleton key={i} className="h-52 rounded-lg" />
+          {Array.from({ length: 8 }, (_, i) => `skeleton-${i}`).map((key) => (
+            <Skeleton key={key} className="h-52 rounded-lg" />
           ))}
         </div>
       </div>
@@ -354,7 +354,7 @@ export function CompaniesView() {
           {(Object.entries(STATUS_CONFIG) as [CompanyStatus, typeof STATUS_CONFIG[CompanyStatus]][]).map(([key, cfg]) => {
             const active = statusFilter.includes(key);
             return (
-              <button key={key} onClick={() => toggleStatusFilter(key)}>
+              <button type="button" key={key} onClick={() => toggleStatusFilter(key)}>
                 <Badge
                   variant={active ? cfg.variant : "outline"}
                   className={cn("cursor-pointer transition-opacity", active && cfg.className, !active && "opacity-50 hover:opacity-80")}
@@ -370,7 +370,7 @@ export function CompaniesView() {
               {[...groups, { id: NO_GROUP, name: "Sem grupo", color: null }].map((g) => {
                 const active = groupFilter.includes(g.id);
                 return (
-                  <button key={g.id} onClick={() => toggleGroupFilter(g.id)}>
+                  <button type="button" key={g.id} onClick={() => toggleGroupFilter(g.id)}>
                     <Badge
                       variant={active ? "secondary" : "outline"}
                       className={cn("cursor-pointer gap-1.5 transition-opacity", !active && "opacity-50 hover:opacity-80")}
@@ -385,6 +385,7 @@ export function CompaniesView() {
           )}
           {hasFilters && (
             <button
+              type="button"
               onClick={clearFilters}
               className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-1"
             >
@@ -410,6 +411,7 @@ export function CompaniesView() {
             </p>
             {hasFilters && (
               <button
+                type="button"
                 onClick={clearFilters}
                 className="text-xs text-primary hover:underline"
               >
@@ -424,6 +426,7 @@ export function CompaniesView() {
               return (
                 <section key={section.key} className="flex flex-col gap-3">
                   <button
+                    type="button"
                     onClick={() => toggleCollapsed(section.key)}
                     className="flex items-center gap-2 text-left group w-fit"
                   >
