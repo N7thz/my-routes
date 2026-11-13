@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
+import { apiRoute } from "@/lib/api-handler";
 import { CNPJ_LENGTH, cnpjDigits, type CnpjData } from "@/lib/cnpj";
 
 type Params = { params: Promise<{ cnpj: string }> };
 
-export async function GET(_req: Request, { params }: Params) {
+export const GET = apiRoute(async (_req, { params }: Params) => {
   const { cnpj } = await params;
   const digits = cnpjDigits(cnpj);
 
@@ -43,4 +44,4 @@ export async function GET(_req: Request, { params }: Params) {
   };
 
   return NextResponse.json(result);
-}
+});

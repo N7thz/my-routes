@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
+import { HttpError } from "@/lib/http-errors";
 
 export type CompanyGroupRecord = {
   id: string;
@@ -18,9 +19,9 @@ export type CompanyGroupInput = {
   companyIds?: string[];
 };
 
-export class GroupNameTakenError extends Error {
+export class GroupNameTakenError extends HttpError {
   constructor() {
-    super("Já existe um grupo com esse nome");
+    super(409, "Já existe um grupo com esse nome");
   }
 }
 

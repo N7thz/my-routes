@@ -1,16 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { apiRoute, parseBody } from "@/lib/api-handler";
+import { routeCreateSchema } from "@/lib/schemas";
 import { listRoutes, createRoute } from "@/lib/route-service";
 
-export async function GET() {
-  const routes = await listRoutes();
-  return NextResponse.json(routes);
-}
+export const GET = apiRoute(async () => NextResponse.json(await listRoutes()));
 
-export async function POST(req: NextRequest) {
-  const body = await req.json();
-  if (!body.name || typeof body.name !== "string") {
-    return NextResponse.json({ error: "Nome é obrigatório" }, { status: 400 });
-  }
-  const route = await createRoute(body);
+export const POST = apiRoute(async (req) => {
+  const route = await createRoute(await parseBody(req, routeCreateSchema));
   return NextResponse.json(route, { status: 201 });
-}
+});

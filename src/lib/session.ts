@@ -1,6 +1,7 @@
 import "server-only";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
+import { UnauthenticatedError } from "@/lib/http-errors";
 
 /** Usuário da requisição atual, ou null sem sessão. */
 export async function getSessionUser() {
@@ -10,6 +11,6 @@ export async function getSessionUser() {
 
 export async function requireUserId(): Promise<string> {
   const user = await getSessionUser();
-  if (!user) throw new Error("Não autenticado");
+  if (!user) throw new UnauthenticatedError();
   return user.id;
 }

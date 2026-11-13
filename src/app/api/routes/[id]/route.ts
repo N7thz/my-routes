@@ -1,24 +1,24 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { apiRoute, NotFoundError, parseBody } from "@/lib/api-handler";
+import { routeUpdateSchema } from "@/lib/schemas";
 import { getRoute, updateRoute, deleteRoute } from "@/lib/route-service";
 
 type Params = { params: Promise<{ id: string }> };
 
-export async function GET(_: NextRequest, { params }: Params) {
+export const GET = apiRoute(async (_req, { params }: Params) => {
   const { id } = await params;
   const route = await getRoute(id);
-  if (!route) return NextResponse.json({ error: "Não encontrada" }, { status: 404 });
+  if (!route) throw new NotFoundError("Rota não encontrada");
   return NextResponse.json(route);
-}
+});
 
-export async function PUT(req: NextRequest, { params }: Params) {
+export const PUT = apiRoute(async (req, { params }: Params) => {
   const { id } = await params;
-  const body = await req.json();
-  const route = await updateRoute(id, body);
-  return NextResponse.json(route);
-}
+  return NextResponse.json(await updateRoute(id, await parseBody(req, routeUpdateSchema)));
+});
 
-export async function DELETE(_: NextRequest, { params }: Params) {
+export const DELETE = apiRoute(async (_req, { params }: Params) => {
   const { id } = await params;
   await deleteRoute(id);
   return NextResponse.json({ ok: true });
-}
+});

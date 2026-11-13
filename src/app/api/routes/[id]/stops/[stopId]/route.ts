@@ -1,17 +1,18 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { apiRoute, parseBody } from "@/lib/api-handler";
+import { stopVisitedSchema } from "@/lib/schemas";
 import { removeStop, markStopVisited } from "@/lib/route-service";
 
 type Params = { params: Promise<{ id: string; stopId: string }> };
 
-export async function DELETE(_: NextRequest, { params }: Params) {
+export const DELETE = apiRoute(async (_req, { params }: Params) => {
   const { id: routeId, stopId } = await params;
   await removeStop(routeId, stopId);
   return NextResponse.json({ ok: true });
-}
+});
 
-export async function PATCH(req: NextRequest, { params }: Params) {
+export const PATCH = apiRoute(async (req, { params }: Params) => {
   const { id: routeId, stopId } = await params;
-  const body = await req.json();
-  const stop = await markStopVisited(routeId, stopId, body.visited ?? true);
-  return NextResponse.json(stop);
-}
+  const { visited } = await parseBody(req, stopVisitedSchema);
+  return NextResponse.json(await markStopVisited(routeId, stopId, visited));
+});

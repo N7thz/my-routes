@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { apiRoute } from "@/lib/api-handler";
 import { getGoogleCalendarToken } from "@/lib/google-auth";
 import {
   createCalendarEvent,
@@ -35,7 +36,7 @@ function eventInputForTask(task: RunrunitTask): NewCalendarEvent | null {
   return { ...base, start: { date }, end: { date: nextDayKey(date) } };
 }
 
-export async function POST() {
+export const POST = apiRoute(async () => {
   if (!isRunrunitConfigured()) {
     return NextResponse.json({ reason: "not-configured" }, { status: 404 });
   }
@@ -92,4 +93,4 @@ export async function POST() {
     total: candidates.length,
     events,
   });
-}
+});

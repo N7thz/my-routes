@@ -1,19 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { apiRoute, parseBody } from "@/lib/api-handler";
+import { routeGenerateSchema } from "@/lib/schemas";
 import { generateRouteFromDate } from "@/lib/route-service";
 
-export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const date = body?.date;
-  if (!date || typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    return NextResponse.json({ error: "Data inválida" }, { status: 400 });
-  }
-  try {
-    const route = await generateRouteFromDate(date);
-    return NextResponse.json(route, { status: 201 });
-  } catch (e) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Falha ao gerar rota" },
-      { status: 400 }
-    );
-  }
-}
+export const POST = apiRoute(async (req) => {
+  const { date } = await parseBody(req, routeGenerateSchema);
+  return NextResponse.json(await generateRouteFromDate(date), { status: 201 });
+});

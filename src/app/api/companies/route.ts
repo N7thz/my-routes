@@ -1,16 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { apiRoute, parseBody } from "@/lib/api-handler";
+import { companyCreateSchema } from "@/lib/schemas";
 import { listCompanies, createCompany } from "@/lib/company-service";
 
-export async function GET() {
-  const companies = await listCompanies();
-  return NextResponse.json(companies);
-}
+export const GET = apiRoute(async () => NextResponse.json(await listCompanies()));
 
-export async function POST(req: NextRequest) {
-  const body = await req.json();
-  if (!body.name || typeof body.name !== "string") {
-    return NextResponse.json({ error: "Nome é obrigatório" }, { status: 400 });
-  }
-  const company = await createCompany(body);
+export const POST = apiRoute(async (req) => {
+  const company = await createCompany(await parseBody(req, companyCreateSchema));
   return NextResponse.json(company, { status: 201 });
-}
+});

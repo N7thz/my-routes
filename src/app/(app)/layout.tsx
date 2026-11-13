@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session";
 import { AppSidebar } from "@/components/app-sidebar";
 import { BottomNav } from "@/components/bottom-nav";
@@ -12,6 +13,8 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   const [user, cookieStore] = await Promise.all([getSessionUser(), cookies()]);
+  // O proxy só vê se o cookie existe; sessão inválida ou expirada cai aqui.
+  if (!user) redirect("/login");
 
   const defaultOpen = cookieStore.get("sidebar:state")?.value === "true";
 

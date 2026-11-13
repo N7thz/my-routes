@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
+import { apiRoute } from "@/lib/api-handler";
 import { getGoogleCalendarToken } from "@/lib/google-auth";
 import { listCalendarEvents } from "@/lib/google-calendar-service";
 
-export async function GET(request: Request) {
+export const GET = apiRoute(async (request) => {
   const result = await getGoogleCalendarToken();
-
   if (!result.hasCalendarScope) {
     return NextResponse.json({ reason: result.reason }, { status: 404 });
   }
@@ -13,6 +13,5 @@ export async function GET(request: Request) {
   const timeMin = searchParams.get("timeMin") ?? undefined;
   const timeMax = searchParams.get("timeMax") ?? undefined;
 
-  const events = await listCalendarEvents(result.accessToken, { timeMin, timeMax });
-  return NextResponse.json(events);
-}
+  return NextResponse.json(await listCalendarEvents(result.accessToken, { timeMin, timeMax }));
+});

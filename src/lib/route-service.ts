@@ -1,6 +1,12 @@
 import "server-only";
+import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { geocodeStop } from "@/lib/geocode";
+import { stopFromCompany, type DayCompany } from "@/lib/route-sync-match";
+
+export { stopFromCompany, type DayCompany };
 import { requireUserId } from "@/lib/session";
+import { HttpError, NotFoundError } from "@/lib/http-errors";
 import { dayRange, formatDate } from "@/lib/dates";
 import type { RouteStatus } from "../../prisma/generated/enums";
 
@@ -41,13 +47,6 @@ const routeInclude = {
   },
 } as const;
 
-export type DayCompany = {
-  id: string;
-  name: string;
-  address: string | null;
-  lat: number | null;
-  lng: number | null;
-};
 
 /** Empresas agendadas (`Company.date`) para o dia. */
 export function companiesOnDay(day: string): Promise<DayCompany[]> {
@@ -64,15 +63,6 @@ export function dayRouteName(day: string, detail?: string): string {
   return detail ? `${name} · ${detail}` : name;
 }
 
-export function stopFromCompany(company: DayCompany) {
-  return {
-    companyId: company.id,
-    label: company.name,
-    address: company.address ?? "",
-    lat: company.lat,
-    lng: company.lng,
-  };
-}
 
 export async function listRoutes(): Promise<RouteRecord[]> {
   const userId = await requireUserId();
@@ -111,7 +101,7 @@ export async function generateRouteFromDate(day: string): Promise<RouteRecord> {
 
   const companies = await companiesOnDay(day);
   if (companies.length === 0) {
-    throw new Error("Nenhuma empresa cadastrada nesta data");
+    throw new HttpError(400, "Nenhuma empresa cadastrada nesta data");
   }
 
   return prisma.route.create({
@@ -162,30 +152,44 @@ export type StopCreateInput = {
 async function requireOwnRoute(routeId: string): Promise<void> {
   const userId = await requireUserId();
   const route = await prisma.route.findFirst({ where: { id: routeId, userId } });
-  if (!route) throw new Error("Rota não encontrada");
+  if (!route) throw new NotFoundError("Rota não encontrada");
 }
 
 export async function addStop(routeId: string, data: StopCreateInput): Promise<StopRecord> {
   await requireOwnRoute(routeId);
 
-  const last = await prisma.stop.findFirst({
-    where: { routeId },
-    orderBy: { order: "desc" },
-    select: { order: true },
+  // Parada de empresa herda as coordenadas já conhecidas da empresa.
+  let point = { lat: data.lat ?? null, lng: data.lng ?? null };
+  if (point.lat === null && data.companyId) {
+    const company = await prisma.company.findUnique({
+      where: { id: data.companyId },
+      select: { lat: true, lng: true, address: true },
+    });
+    if (company?.lat != null && company.address === data.address) {
+      point = { lat: company.lat, lng: company.lng };
+    }
+  }
+
+  const stop = await prisma.$transaction(async (tx) => {
+    // Trava a rota: duas inclusões simultâneas não leem o mesmo "último order".
+    await tx.$executeRaw`SELECT 1 FROM "route" WHERE "id" = ${routeId} FOR UPDATE`;
+    const { _max } = await tx.stop.aggregate({ where: { routeId }, _max: { order: true } });
+
+    return tx.stop.create({
+      data: {
+        routeId,
+        companyId: data.companyId ?? null,
+        label: data.label ?? null,
+        address: data.address,
+        ...point,
+        order: (_max.order ?? -1) + 1,
+      },
+      ...stopInclude,
+    });
   });
 
-  return prisma.stop.create({
-    data: {
-      routeId,
-      companyId: data.companyId ?? null,
-      label: data.label ?? null,
-      address: data.address,
-      lat: data.lat ?? null,
-      lng: data.lng ?? null,
-      order: (last?.order ?? -1) + 1,
-    },
-    ...stopInclude,
-  });
+  if (stop.lat === null && stop.address) after(() => geocodeStop(stop.id));
+  return stop;
 }
 
 export async function removeStop(routeId: string, stopId: string): Promise<void> {

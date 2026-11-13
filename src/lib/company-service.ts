@@ -7,7 +7,10 @@ import {
   iteratePaginatedAPI,
 } from "@notionhq/client";
 import type { CompanyStatus } from "../../prisma/generated/enums";
+import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { geocodeCompany } from "@/lib/geocode";
+import { HttpError, NotFoundError } from "@/lib/http-errors";
 import { notionPageUrl } from "@/lib/notion";
 import { formatDate } from "@/lib/dates";
 import { appendTree, fillTableCells, readInspectionTemplate } from "@/lib/notion-template";
@@ -69,7 +72,13 @@ export type CompanyUpdateInput = {
 };
 
 export async function updateCompany(id: string, data: CompanyUpdateInput): Promise<CompanyRecord> {
-  return prisma.company.update({
+  const before =
+    data.address !== undefined
+      ? await prisma.company.findUnique({ where: { id }, select: { address: true } })
+      : null;
+  const addressChanged = data.address !== undefined && before?.address !== data.address;
+
+  const company = await prisma.company.update({
     where: { id },
     data: {
       ...(data.name !== undefined && { name: data.name }),
@@ -79,8 +88,12 @@ export async function updateCompany(id: string, data: CompanyUpdateInput): Promi
       ...(data.observations !== undefined && { observations: data.observations }),
       ...(data.groupId !== undefined && { groupId: data.groupId }),
       ...(data.date !== undefined && { date: data.date ? new Date(data.date) : null }),
+      // Endereço novo invalida as coordenadas antigas; o geocode roda depois da resposta.
+      ...(addressChanged && { lat: null, lng: null }),
     },
   });
+  if (addressChanged && data.address) after(() => geocodeCompany(id));
+  return company;
 }
 
 export async function deleteCompany(id: string): Promise<void> {
@@ -98,7 +111,7 @@ export type CompanyCreateInput = {
 };
 
 export async function createCompany(data: CompanyCreateInput): Promise<CompanyRecord> {
-  return prisma.company.create({
+  const company = await prisma.company.create({
     data: {
       name: data.name,
       cnpj: data.cnpj ?? null,
@@ -109,6 +122,8 @@ export async function createCompany(data: CompanyCreateInput): Promise<CompanyRe
       date: data.date ? new Date(data.date) : null,
     },
   });
+  if (company.address) after(() => geocodeCompany(company.id));
+  return company;
 }
 
 export type ImportResult = {
@@ -121,6 +136,14 @@ export type ImportResult = {
 export async function importFromNotion(client: Client): Promise<ImportResult> {
   const result: ImportResult = { created: 0, updated: 0, skipped: 0, total: 0 };
   const dataSourceId = await notionDataSourceId(client);
+
+  // Uma consulta para saber quem já existe, em vez de uma por página do Notion.
+  const linked = await prisma.company.findMany({
+    where: { notionId: { not: null } },
+    select: { id: true, notionId: true },
+  });
+  const idByNotionId = new Map(linked.map((c) => [c.notionId as string, c.id]));
+  const toCreate: { name: string; cnpj: string | null; observations: string | null; status: CompanyStatus | null; date: Date | null; notionId: string }[] = [];
 
   const rows = iteratePaginatedAPI(client.dataSources.query, {
     data_source_id: dataSourceId,
@@ -158,36 +181,35 @@ export async function importFromNotion(client: Client): Promise<ImportResult> {
       props.Data?.type === "date" ? props.Data.date?.start ?? null : null;
     const date = rawDate ? new Date(rawDate) : null;
 
-    const existing = await prisma.company.findUnique({
-      where: { notionId: item.id },
-    });
-
-    if (existing) {
+    const existingId = idByNotionId.get(item.id);
+    if (existingId) {
       await prisma.company.update({
-        where: { id: existing.id },
+        where: { id: existingId },
         data: { name, cnpj, observations, status, date },
       });
       result.updated++;
     } else {
-      await prisma.company.create({
-        data: { name, cnpj, observations, status, date, notionId: item.id },
-      });
-      result.created++;
+      toCreate.push({ name, cnpj, observations, status, date, notionId: item.id });
     }
+  }
+
+  if (toCreate.length > 0) {
+    const { count } = await prisma.company.createMany({ data: toCreate, skipDuplicates: true });
+    result.created = count;
   }
 
   return result;
 }
 
-export class CompanyNotFoundError extends Error {
+export class CompanyNotFoundError extends NotFoundError {
   constructor() {
     super("Empresa não encontrada");
   }
 }
 
-export class NotionTemplateUnavailableError extends Error {
+export class NotionTemplateUnavailableError extends HttpError {
   constructor() {
-    super("A conexão do Notion não tem acesso à página MODELO INSPEÇÃO");
+    super(502, "A conexão do Notion não tem acesso à página MODELO INSPEÇÃO");
   }
 }
 
@@ -213,7 +235,7 @@ export async function createNotionPageForCompany(
   }
 
   // Lido antes de criar a página: sem acesso ao modelo, nada fica pela metade.
-  let template;
+  let template: Awaited<ReturnType<typeof readInspectionTemplate>>;
   try {
     template = await readInspectionTemplate(client);
   } catch (err) {
