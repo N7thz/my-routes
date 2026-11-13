@@ -1,7 +1,16 @@
 import "server-only";
-import { Client, isFullPage } from "@notionhq/client";
+import {
+  APIErrorCode,
+  Client,
+  isFullPage,
+  isNotionClientError,
+  iteratePaginatedAPI,
+} from "@notionhq/client";
 import type { CompanyStatus } from "../../prisma/generated/enums";
 import { prisma } from "@/lib/prisma";
+import { notionPageUrl } from "@/lib/notion";
+import { formatDate } from "@/lib/dates";
+import { appendTree, fillTableCells, readInspectionTemplate } from "@/lib/notion-template";
 
 export type { CompanyStatus };
 
@@ -21,7 +30,7 @@ export type CompanyRecord = {
   updatedAt: Date;
 };
 
-const NOTION_DB_ID = "e2279539b63b47668b7b6213f49cf96d";
+const NOTION_DB_ID = process.env.NOTION_COMPANIES_DB_ID ?? "e2279539b63b47668b7b6213f49cf96d";
 
 const STATUS_MAP: Record<string, CompanyStatus> = {
   Pendente: "PENDENTE",
@@ -29,6 +38,21 @@ const STATUS_MAP: Record<string, CompanyStatus> = {
   "Concluído": "CONCLUIDO",
   Revisão: "REVISAO",
 };
+
+const NOTION_STATUS: Record<CompanyStatus, string> = Object.fromEntries(
+  Object.entries(STATUS_MAP).map(([label, status]) => [status, label])
+) as Record<CompanyStatus, string>;
+
+/**
+ * Na API 2025-09-03 do Notion o database é um contêiner: consultas e criação
+ * de páginas vão para a fonte de dados (data source) dentro dele.
+ */
+async function notionDataSourceId(client: Client): Promise<string> {
+  const db = await client.databases.retrieve({ database_id: NOTION_DB_ID });
+  const id = "data_sources" in db ? db.data_sources[0]?.id : undefined;
+  if (!id) throw new Error("Database do Notion sem fonte de dados");
+  return id;
+}
 
 export async function listCompanies(): Promise<CompanyRecord[]> {
   return prisma.company.findMany({ orderBy: { name: "asc" } });
@@ -96,68 +120,137 @@ export type ImportResult = {
 
 export async function importFromNotion(client: Client): Promise<ImportResult> {
   const result: ImportResult = { created: 0, updated: 0, skipped: 0, total: 0 };
-  let cursor: string | undefined;
+  const dataSourceId = await notionDataSourceId(client);
 
-  do {
-    // databases.query not typed in this Notion client version — cast to any
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const response = await (client.databases as any).query({
-      database_id: NOTION_DB_ID,
-      start_cursor: cursor,
-      page_size: 100,
+  const rows = iteratePaginatedAPI(client.dataSources.query, {
+    data_source_id: dataSourceId,
+    page_size: 100,
+  });
+
+  for await (const item of rows) {
+    if (!isFullPage(item)) { result.skipped++; continue; }
+    result.total++;
+
+    const props = item.properties;
+
+    const name =
+      props.Empresa?.type === "title"
+        ? props.Empresa.title[0]?.plain_text?.trim() ?? ""
+        : "";
+
+    if (!name) { result.skipped++; continue; }
+
+    const cnpj =
+      props.CNPJ?.type === "rich_text"
+        ? (props.CNPJ.rich_text[0]?.plain_text?.trim() || null)
+        : null;
+
+    const observations =
+      props["Observações"]?.type === "rich_text"
+        ? (props["Observações"].rich_text[0]?.plain_text?.trim() || null)
+        : null;
+
+    const notionStatus =
+      props.Status?.type === "select" ? props.Status.select?.name ?? null : null;
+    const status = notionStatus ? (STATUS_MAP[notionStatus] ?? null) : null;
+
+    const rawDate =
+      props.Data?.type === "date" ? props.Data.date?.start ?? null : null;
+    const date = rawDate ? new Date(rawDate) : null;
+
+    const existing = await prisma.company.findUnique({
+      where: { notionId: item.id },
     });
 
-    for (const item of response.results) {
-      if (!isFullPage(item)) { result.skipped++; continue; }
-      result.total++;
-
-      const props = item.properties;
-
-      const name =
-        props.Empresa?.type === "title"
-          ? props.Empresa.title[0]?.plain_text?.trim() ?? ""
-          : "";
-
-      if (!name) { result.skipped++; continue; }
-
-      const cnpj =
-        props.CNPJ?.type === "rich_text"
-          ? (props.CNPJ.rich_text[0]?.plain_text?.trim() || null)
-          : null;
-
-      const observations =
-        props["Observações"]?.type === "rich_text"
-          ? (props["Observações"].rich_text[0]?.plain_text?.trim() || null)
-          : null;
-
-      const notionStatus =
-        props.Status?.type === "select" ? props.Status.select?.name ?? null : null;
-      const status = notionStatus ? (STATUS_MAP[notionStatus] ?? null) : null;
-
-      const rawDate =
-        props.Data?.type === "date" ? props.Data.date?.start ?? null : null;
-      const date = rawDate ? new Date(rawDate) : null;
-
-      const existing = await prisma.company.findUnique({
-        where: { notionId: item.id },
+    if (existing) {
+      await prisma.company.update({
+        where: { id: existing.id },
+        data: { name, cnpj, observations, status, date },
       });
-
-      if (existing) {
-        await prisma.company.update({
-          where: { id: existing.id },
-          data: { name, cnpj, observations, status, date },
-        });
-        result.updated++;
-      } else {
-        await prisma.company.create({
-          data: { name, cnpj, observations, status, date, notionId: item.id },
-        });
-        result.created++;
-      }
+      result.updated++;
+    } else {
+      await prisma.company.create({
+        data: { name, cnpj, observations, status, date, notionId: item.id },
+      });
+      result.created++;
     }
-
-    cursor = response.has_more && response.next_cursor ? response.next_cursor : undefined;
-  } while (cursor);
+  }
 
   return result;
+}
+
+export class CompanyNotFoundError extends Error {
+  constructor() {
+    super("Empresa não encontrada");
+  }
+}
+
+export class NotionTemplateUnavailableError extends Error {
+  constructor() {
+    super("A conexão do Notion não tem acesso à página MODELO INSPEÇÃO");
+  }
+}
+
+export type NotionPageResult = { notionId: string; url: string; created: boolean };
+
+const richText = (content: string) => [{ type: "text" as const, text: { content: content.slice(0, 2000) } }];
+
+/**
+ * Cria no database de empresas do Notion uma página com os dados da empresa e
+ * o corpo copiado do "MODELO INSPEÇÃO" (data e local já preenchidos), e guarda
+ * o id dela em `notionId`, ligando os dois lados (o import passa a atualizar
+ * essa empresa em vez de duplicar). Se a empresa já tem página, devolve a
+ * existente sem criar outra.
+ */
+export async function createNotionPageForCompany(
+  client: Client,
+  companyId: string
+): Promise<NotionPageResult> {
+  const company = await prisma.company.findUnique({ where: { id: companyId } });
+  if (!company) throw new CompanyNotFoundError();
+  if (company.notionId) {
+    return { notionId: company.notionId, url: notionPageUrl(company.notionId), created: false };
+  }
+
+  // Lido antes de criar a página: sem acesso ao modelo, nada fica pela metade.
+  let template;
+  try {
+    template = await readInspectionTemplate(client);
+  } catch (err) {
+    if (isNotionClientError(err) && err.code === APIErrorCode.ObjectNotFound) {
+      throw new NotionTemplateUnavailableError();
+    }
+    throw err;
+  }
+  fillTableCells(template, {
+    "DATA DA INSPEÇÃO": company.date ? formatDate(company.date) : null,
+    "LOCAL / UNIDADE": [company.name, company.address].filter(Boolean).join(" — "),
+  });
+
+  const page = await client.pages.create({
+    parent: { type: "data_source_id", data_source_id: await notionDataSourceId(client) },
+    properties: {
+      Empresa: { title: richText(company.name) },
+      ...(company.cnpj && { CNPJ: { rich_text: richText(company.cnpj) } }),
+      ...(company.observations && { "Observações": { rich_text: richText(company.observations) } }),
+      ...(company.status && { Status: { select: { name: NOTION_STATUS[company.status] } } }),
+      ...(company.date && { Data: { date: { start: company.date.toISOString() } } }),
+    },
+  });
+
+  try {
+    await appendTree(client, page.id, template);
+  } catch (err) {
+    // Página sem o modelo completo não serve: vai para a lixeira e o usuário tenta de novo.
+    await client.pages.update({ page_id: page.id, in_trash: true }).catch(() => {});
+    throw err;
+  }
+
+  await prisma.company.update({ where: { id: companyId }, data: { notionId: page.id } });
+
+  return {
+    notionId: page.id,
+    url: "url" in page ? page.url : notionPageUrl(page.id),
+    created: true,
+  };
 }

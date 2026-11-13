@@ -18,7 +18,11 @@ import {
   PencilIcon,
   Trash2Icon,
   RouteIcon,
+  NotebookPenIcon,
+  Loader2Icon,
 } from "lucide-react";
+import { useCreateNotionPage } from "@/hooks/use-companies";
+import { notionPageUrl } from "@/lib/notion";
 import { EnrichedCompany, STATUS_CONFIG, eventStartDate, formatDateTime } from "@/components/companies/company-model";
 import { GroupBadge } from "@/components/companies/company-list";
 
@@ -37,7 +41,28 @@ export function CompanySheet({
   onDelete: (c: EnrichedCompany) => void;
   onAddToRoute: (c: EnrichedCompany) => void;
 }) {
+  const createNotionPage = useCreateNotionPage();
+
   if (!company) return null;
+
+  // A empresa do prop pode chegar antes do refetch: a URL recém-criada vale até lá.
+  const created = createNotionPage.data;
+  const notionUrl = company.notionId
+    ? notionPageUrl(company.notionId)
+    : created && createNotionPage.variables === company.id
+      ? created.url
+      : null;
+
+  function handleNotion() {
+    if (!company) return;
+    if (notionUrl) {
+      window.open(notionUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+    createNotionPage.mutate(company.id, {
+      onSuccess: (res) => window.open(res.url, "_blank", "noopener,noreferrer"),
+    });
+  }
 
   const sortedTasks = [...company.tasks].sort((a, b) => {
     const da = taskBestDate(a);
@@ -72,6 +97,22 @@ export function CompanySheet({
                 variant="ghost"
                 size="icon"
                 className="size-7"
+                onClick={handleNotion}
+                disabled={createNotionPage.isPending}
+                title={notionUrl ? "Abrir no Notion" : "Criar página no Notion"}
+              >
+                {createNotionPage.isPending ? (
+                  <Loader2Icon className="size-3.5 animate-spin" />
+                ) : notionUrl ? (
+                  <ExternalLinkIcon className="size-3.5" />
+                ) : (
+                  <NotebookPenIcon className="size-3.5" />
+                )}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7"
                 onClick={() => onAddToRoute(company)}
                 title="Adicionar à rota"
               >
@@ -98,6 +139,9 @@ export function CompanySheet({
             </div>
           </div>
           <SheetTitle className="text-lg">{company.name}</SheetTitle>
+          {createNotionPage.isError && createNotionPage.variables === company.id && (
+            <p className="text-xs text-destructive">{createNotionPage.error.message}</p>
+          )}
           <div className="flex flex-wrap gap-2 mt-1">
             {company.group && <GroupBadge group={company.group} />}
             {statusCfg && <Badge variant={statusCfg.variant} className={statusCfg.className}>{statusCfg.label}</Badge>}

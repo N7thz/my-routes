@@ -1,6 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
-import type { CompanyRecord, CompanyUpdateInput, CompanyCreateInput } from "@/lib/company-service";
+import type {
+  CompanyRecord,
+  CompanyUpdateInput,
+  CompanyCreateInput,
+  NotionPageResult,
+} from "@/lib/company-service";
 
 const COMPANIES_KEY = ["companies"] as const;
 export const COMPANY_GROUPS_KEY = ["company-groups"] as const;
@@ -48,6 +53,17 @@ export function useDeleteCompany() {
   return useMutation({
     mutationFn: (id: string) =>
       api(`/api/companies/${id}`, "Falha ao excluir empresa", { method: "DELETE" }),
+    onSuccess: useInvalidateCompanies(),
+  });
+}
+
+/** Cria a página da empresa no Notion; devolve a URL para abrir. */
+export function useCreateNotionPage() {
+  return useMutation({
+    mutationFn: (id: string) =>
+      api<NotionPageResult>(`/api/companies/${id}/notion`, "Falha ao criar página no Notion", {
+        method: "POST",
+      }),
     onSuccess: useInvalidateCompanies(),
   });
 }
