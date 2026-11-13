@@ -6,4 +6,4 @@ import { createAuthClient } from "better-auth/react";
 // so it always hits the same host that served the page (localhost in dev,
 // the deployed domain in production). Hardcoding a prod URL here breaks
 // local dev with a cross-origin "Failed to fetch".
-export const { signIn, signOut } = createAuthClient();
+export const { signIn, signOut, linkSocial } = createAuthClient();

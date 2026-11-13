@@ -1,10 +1,18 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
 import { getInitials } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
+import { ThemeSetting } from "@/components/settings/theme-setting";
+import { AutoRouteSettings } from "@/components/settings/auto-route-settings";
+import {
+  ClearCacheButton,
+  ConnectButton,
+  SignOutButton,
+} from "@/components/settings/settings-actions";
 import {
   CheckCircle2Icon,
   XCircleIcon,
@@ -21,106 +29,94 @@ import {
   NotebookIcon,
   UsersIcon,
   ZapIcon,
+  ChevronDownIcon,
 } from "lucide-react";
+
+export const metadata: Metadata = {
+  title: "Configurações",
+  description: "Conta, aparência, rota automática e integrações do My Routes.",
+};
 
 function memberSince(date: Date | string) {
   return new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(new Date(date));
 }
 
 const FEATURES = [
-  {
-    done: true,
-    icon: BuildingIcon,
-    title: "Gestão de empresas",
-    desc: "CRUD completo com status, observações e CNPJ",
-  },
-  {
-    done: true,
-    icon: SlidersIcon,
-    title: "Filtros e paginação",
-    desc: "Filtro por status, busca e itens por página via URL",
-  },
-  {
-    done: true,
-    icon: NotebookIcon,
-    title: "Importação do Notion",
-    desc: "Sincronização de empresas a partir de banco Notion",
-  },
-  {
-    done: true,
-    icon: RouteIcon,
-    title: "Planejamento de rotas",
-    desc: "Criação de rotas com paradas ordenadas e empresas vinculadas",
-  },
-  {
-    done: true,
-    icon: MapIcon,
-    title: "Mapa integrado (OpenStreetMap)",
-    desc: "Mapa gratuito com rota calculada via OSRM, sem billing",
-  },
-  {
-    done: true,
-    icon: SmartphoneIcon,
-    title: "Rastreamento GPS em tempo real",
-    desc: "watchPosition com marcador pulsante usando avatar do usuário",
-  },
-  {
-    done: true,
-    icon: MapPinIcon,
-    title: "Controle de paradas visitadas",
-    desc: "Toggle por clique com horário de visita registrado",
-  },
-  {
-    done: true,
-    icon: ZapIcon,
-    title: "Rota do dia em destaque",
-    desc: "Página principal exibe automaticamente a rota do dia atual",
-  },
-  {
-    done: false,
-    icon: CalendarIcon,
-    title: "Integração Google Calendar",
-    desc: "Ler eventos da agenda e criar empresas/visitas automaticamente",
-  },
-  {
-    done: false,
-    icon: BrainCircuitIcon,
-    title: "Rota automática pela agenda",
-    desc: "Gerar rota do dia baseada nos eventos do calendário",
-  },
-  {
-    done: false,
-    icon: UsersIcon,
-    title: "Multiusuário e equipes",
-    desc: "Compartilhamento de rotas entre membros da equipe",
-  },
-  {
-    done: true,
-    icon: DatabaseIcon,
-    title: "Sincronização offline",
-    desc: "PWA instalável com cache local e dados persistidos para uso offline",
-  },
+  { done: true, icon: BuildingIcon, title: "Gestão de empresas", desc: "CRUD completo com status, observações e CNPJ" },
+  { done: true, icon: SlidersIcon, title: "Filtros e paginação", desc: "Filtro por status, busca e itens por página via URL" },
+  { done: true, icon: NotebookIcon, title: "Importação do Notion", desc: "Sincronização de empresas a partir de banco Notion" },
+  { done: true, icon: RouteIcon, title: "Planejamento de rotas", desc: "Criação de rotas com paradas ordenadas e empresas vinculadas" },
+  { done: true, icon: MapIcon, title: "Mapa integrado (OpenStreetMap)", desc: "Mapa gratuito com rota calculada via OSRM, sem billing" },
+  { done: true, icon: SmartphoneIcon, title: "Rastreamento GPS em tempo real", desc: "watchPosition com marcador pulsante usando avatar do usuário" },
+  { done: true, icon: MapPinIcon, title: "Controle de paradas visitadas", desc: "Toggle por clique com horário de visita registrado" },
+  { done: true, icon: ZapIcon, title: "Rota do dia em destaque", desc: "Página principal exibe automaticamente a rota do dia atual" },
+  { done: true, icon: DatabaseIcon, title: "Sincronização offline", desc: "PWA instalável com cache local e dados persistidos para uso offline" },
+  { done: true, icon: CalendarIcon, title: "Integração Google Calendar", desc: "Rotas sincronizadas com eventos do Google Agenda" },
+  { done: true, icon: BrainCircuitIcon, title: "Rota automática do dia", desc: "Cron diário cria a rota do dia a partir das tarefas do Runrunit" },
+  { done: false, icon: UsersIcon, title: "Multiusuário e equipes", desc: "Compartilhamento de rotas entre membros da equipe" },
 ];
 
 type ConnStatus = "connected" | "configured" | "missing";
 
 function ConnectionBadge({ status }: { status: ConnStatus }) {
-  if (status === "connected")
+  if (status === "missing")
     return (
-      <Badge className="gap-1 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 border-transparent text-xs">
-        <CheckCircle2Icon className="size-3" /> Conectado
-      </Badge>
-    );
-  if (status === "configured")
-    return (
-      <Badge className="gap-1 bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border-transparent text-xs">
-        <CheckCircle2Icon className="size-3" /> Configurado
+      <Badge className="gap-1 border-transparent bg-muted text-xs text-muted-foreground">
+        <XCircleIcon className="size-3" /> Desconectado
       </Badge>
     );
   return (
-    <Badge className="gap-1 bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400 border-transparent text-xs">
-      <XCircleIcon className="size-3" /> Não configurado
+    <Badge className="gap-1 border-transparent bg-emerald-100 text-xs text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+      <CheckCircle2Icon className="size-3" /> {status === "connected" ? "Conectado" : "Configurado"}
     </Badge>
+  );
+}
+
+/** Bloco de configurações: título e descrição à esquerda, conteúdo à direita (empilha no mobile). */
+function Section({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="grid gap-4 md:grid-cols-[14rem_1fr] md:gap-8">
+      <div>
+        <h2 className="text-base font-semibold">{title}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+      </div>
+      <Card className="relative isolate overflow-hidden">
+        <CardBackground />
+        <div className="divide-y">{children}</div>
+      </Card>
+    </section>
+  );
+}
+
+/** Linha de configuração: rótulo + descrição e uma ação à direita. */
+function Row({
+  title,
+  description,
+  leading,
+  children,
+}: {
+  title: React.ReactNode;
+  description?: React.ReactNode;
+  leading?: React.ReactNode;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-3 p-4 sm:flex-nowrap">
+      {leading}
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-medium">{title}</div>
+        {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
+      </div>
+      {children && <div className="flex shrink-0 items-center gap-2">{children}</div>}
+    </div>
   );
 }
 
@@ -128,143 +124,229 @@ export default async function PerfilPage() {
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+
   const [accounts, companyCount, routeCount, visitedToday] = await Promise.all([
     prisma.account.findMany({ where: { userId: user.id }, select: { providerId: true } }),
     prisma.company.count(),
     prisma.route.count({ where: { userId: user.id } }),
     prisma.stop.count({
-      where: {
-        route: { userId: user.id },
-        visitedAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
-      },
+      where: { route: { userId: user.id }, visitedAt: { gte: startOfToday } },
     }),
   ]);
 
   const providers = new Set(accounts.map((a) => a.providerId));
 
-  const connections: { label: string; desc: string; logo: string; status: ConnStatus }[] = [
+  const oauthConnections = [
     {
+      provider: "google" as const,
       label: "Google",
-      desc: "Login OAuth + acesso ao Google Calendar",
-      logo: "https://www.google.com/favicon.ico",
-      status: providers.has("google") ? "connected" : "missing",
+      desc: "Login e Google Agenda. Reconecte se a sincronização de eventos falhar.",
+      logo: "/integrations/google.png",
     },
     {
+      provider: "notion" as const,
       label: "Notion",
-      desc: "Importação de empresas do banco de dados",
-      logo: "https://www.notion.so/favicon.ico",
-      status: providers.has("notion") ? "connected" : "missing",
+      desc: "Importação e sincronização de empresas a partir do banco do Notion.",
+      logo: "/integrations/notion.png",
+    },
+  ];
+
+  const envConnections: { label: string; desc: string; logo: string; status: ConnStatus; envHint: string }[] = [
+    {
+      label: "Runrunit",
+      desc: "Tarefas usadas para montar a rota do dia.",
+      logo: "/integrations/runrunit.png",
+      status: process.env.RUNRUNIT_APP_KEY && process.env.RUNRUNIT_USER_TOKEN ? "configured" : "missing",
+      envHint: "RUNRUNIT_APP_KEY e RUNRUNIT_USER_TOKEN",
     },
     {
-      label: "RunRunit",
-      desc: "Integração com gestão de tarefas",
-      logo: "https://runrunit.com/favicon.ico",
-      status:
-        process.env.RUNRUNIT_APP_KEY && process.env.RUNRUNIT_USER_TOKEN ? "configured" : "missing",
-    },
-    {
-      label: "Google Maps API",
-      desc: "Mapa avançado com Directions API (billing requerido)",
-      logo: "https://maps.google.com/favicon.ico",
+      label: "Google Maps",
+      desc: "Mapa avançado com Directions API (exige billing).",
+      logo: "/integrations/google-maps.png",
       status: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? "configured" : "missing",
+      envHint: "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY",
     },
   ];
 
   const doneCount = FEATURES.filter((f) => f.done).length;
+  const createdAt = (user as { createdAt?: string | Date }).createdAt ?? new Date();
+
+  const stats = [
+    { icon: BuildingIcon, value: companyCount, label: "Empresas" },
+    { icon: RouteIcon, value: routeCount, label: "Rotas" },
+    { icon: MapPinIcon, value: visitedToday, label: "Visitas hoje" },
+  ];
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="mx-auto max-w-4xl space-y-6 p-6">
-        <Card>
-          <CardContent className="flex items-center gap-5 pt-6">
-            <Avatar className="size-20 shrink-0 ring-2 ring-primary/20 ring-offset-2">
+      <div className="mx-auto max-w-4xl space-y-10 px-4 py-6 pb-28 sm:px-6 md:pb-10">
+        <header>
+          <h1 className="text-2xl font-bold tracking-tight">Configurações</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Sua conta, aparência e as integrações do app.
+          </p>
+        </header>
+
+        {/* Conta */}
+        <Card className="relative isolate overflow-hidden">
+          <CardBackground />
+          <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center">
+            <Avatar className="size-16 shrink-0 ring-2 ring-primary/20 ring-offset-2 ring-offset-background">
               <AvatarImage src={user.image ?? ""} alt={user.name ?? ""} />
-              <AvatarFallback className="text-xl">{getInitials(user.name)}</AvatarFallback>
+              <AvatarFallback className="text-lg">{getInitials(user.name)}</AvatarFallback>
             </Avatar>
-            <div className="min-w-0">
-              <h1 className="text-xl font-bold leading-tight">{user.name}</h1>
-              <p className="text-sm text-muted-foreground">{user.email}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Membro desde{" "}
-                {memberSince((user as { createdAt?: string | Date }).createdAt ?? new Date())}
-              </p>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-lg font-semibold leading-tight">{user.name}</p>
+              <p className="truncate text-sm text-muted-foreground">{user.email}</p>
+              <p className="mt-1 text-xs text-muted-foreground">Membro desde {memberSince(createdAt)}</p>
             </div>
-          </CardContent>
+          </div>
+          <dl className="grid grid-cols-3 divide-x border-t bg-card/60 backdrop-blur-sm">
+            {stats.map(({ icon: Icon, value, label }) => (
+              <div key={label} className="flex flex-col items-center gap-0.5 px-2 py-4">
+                <dt className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Icon className="size-3.5" />
+                  {label}
+                </dt>
+                <dd className="text-2xl font-bold tabular-nums">{value}</dd>
+              </div>
+            ))}
+          </dl>
         </Card>
 
-        <div className="grid grid-cols-3 gap-4">
-          {[
-            { icon: BuildingIcon, value: companyCount, label: "Empresas" },
-            { icon: RouteIcon, value: routeCount, label: "Rotas criadas" },
-            { icon: MapPinIcon, value: visitedToday, label: "Visitadas hoje" },
-          ].map(({ icon: Icon, value, label }) => (
-            <Card key={label}>
-              <CardContent className="flex flex-col items-center justify-center gap-1 py-5">
-                <Icon className="size-5 text-muted-foreground mb-1" />
-                <span className="text-3xl font-bold tabular-nums">{value}</span>
-                <span className="text-xs text-muted-foreground">{label}</span>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <Section title="Aparência" description="Como o app aparece neste dispositivo.">
+          <Row title="Tema" description="Escolha entre o tema claro e o escuro.">
+            <ThemeSetting />
+          </Row>
+        </Section>
 
-        <div className="grid gap-6 md:grid-cols-2">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Conexões</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {connections.map((c) => (
-                <div key={c.label} className="flex items-center gap-3">
-                  <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border bg-muted/30">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={c.logo} alt={c.label} className="size-4" onError={undefined} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium leading-none">{c.label}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{c.desc}</p>
-                  </div>
-                  <ConnectionBadge status={c.status} />
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+        <Section
+          title="Rota automática"
+          description="Monta as rotas do dia sozinha, a partir do Runrunit e da agenda, na melhor ordem."
+        >
+          <AutoRouteSettings />
+        </Section>
 
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base">Progresso do produto</CardTitle>
-                <span className="text-xs text-muted-foreground">
-                  {doneCount}/{FEATURES.length} implementadas
+        <Section
+          title="Integrações"
+          description="Contas e serviços externos de onde o app lê e grava dados."
+        >
+          {oauthConnections.map((c) => {
+            const connected = providers.has(c.provider);
+            return (
+              <Row
+                key={c.label}
+                leading={<Logo src={c.logo} alt={c.label} />}
+                title={
+                  <span className="flex items-center gap-2">
+                    {c.label} <ConnectionBadge status={connected ? "connected" : "missing"} />
+                  </span>
+                }
+                description={c.desc}
+              >
+                <ConnectButton provider={c.provider} connected={connected} />
+              </Row>
+            );
+          })}
+          {envConnections.map((c) => (
+            <Row
+              key={c.label}
+              leading={<Logo src={c.logo} alt={c.label} />}
+              title={
+                <span className="flex items-center gap-2">
+                  {c.label} <ConnectionBadge status={c.status} />
                 </span>
-              </div>
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted mt-2">
-                <div
-                  className="h-full rounded-full bg-primary transition-all"
-                  style={{ width: `${(doneCount / FEATURES.length) * 100}%` }}
-                />
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-1.5">
-              {FEATURES.map((f) => (
-                <div key={f.title} className="flex items-start gap-2.5">
-                  {f.done ? (
-                    <CheckCircle2Icon className="mt-0.5 size-4 shrink-0 text-emerald-500" />
-                  ) : (
-                    <ClockIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground/50" />
-                  )}
-                  <div className="min-w-0">
-                    <p className={`text-sm leading-none ${!f.done ? "text-muted-foreground" : ""}`}>
-                      {f.title}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{f.desc}</p>
-                  </div>
+              }
+              description={
+                c.status === "missing" ? (
+                  <>
+                    {c.desc} Defina <code className="font-mono text-[11px]">{c.envHint}</code> no ambiente.
+                  </>
+                ) : (
+                  c.desc
+                )
+              }
+            />
+          ))}
+        </Section>
+
+        <Section title="Dados" description="Cache local usado para o app funcionar offline.">
+          <Row
+            title="Cache offline"
+            description="Apaga os dados guardados neste dispositivo. Eles são baixados de novo na próxima vez que você abrir uma tela."
+          >
+            <ClearCacheButton />
+          </Row>
+        </Section>
+
+        <Section title="Sessão" description="Encerrar o acesso neste dispositivo.">
+          <Row title="Sair" description={`Conectado como ${user.email}`}>
+            <SignOutButton />
+          </Row>
+        </Section>
+
+        {/* Sobre: o roadmap fica recolhido para não competir com as configurações */}
+        <details className="group relative isolate overflow-hidden rounded-lg border">
+          <CardBackground />
+          <summary className="flex cursor-pointer list-none items-center gap-3 p-4 [&::-webkit-details-marker]:hidden">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium">Sobre o My Routes</p>
+              <p className="text-xs text-muted-foreground">
+                {doneCount} de {FEATURES.length} funcionalidades prontas
+              </p>
+            </div>
+            <div className="hidden h-1.5 w-32 overflow-hidden rounded-full bg-muted sm:block">
+              <div
+                className="h-full rounded-full bg-primary"
+                style={{ width: `${(doneCount / FEATURES.length) * 100}%` }}
+              />
+            </div>
+            <ChevronDownIcon className="size-4 text-muted-foreground transition-transform group-open:rotate-180" />
+          </summary>
+          <ul className="grid gap-3 border-t p-4 sm:grid-cols-2">
+            {FEATURES.map((f) => (
+              <li key={f.title} className="flex items-start gap-2.5">
+                {f.done ? (
+                  <CheckCircle2Icon className="mt-0.5 size-4 shrink-0 text-emerald-600 dark:text-emerald-500" />
+                ) : (
+                  <ClockIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground/50" />
+                )}
+                <div className="min-w-0">
+                  <p className={`text-sm leading-tight ${f.done ? "" : "text-muted-foreground"}`}>{f.title}</p>
+                  <p className="mt-0.5 text-xs leading-tight text-muted-foreground">{f.desc}</p>
                 </div>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
+              </li>
+            ))}
+          </ul>
+        </details>
       </div>
+    </div>
+  );
+}
+
+/** Fundo decorativo dos cards: brilhos radiais na cor primária + grade sutil que some para baixo. */
+function CardBackground() {
+  return (
+    <>
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_80%_70%_at_0%_0%,color-mix(in_oklab,var(--primary)_22%,transparent),transparent_70%),radial-gradient(ellipse_60%_60%_at_100%_0%,color-mix(in_oklab,var(--primary)_12%,transparent),transparent_70%)]"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(to_right,color-mix(in_oklab,var(--foreground)_6%,transparent)_1px,transparent_1px),linear-gradient(to_bottom,color-mix(in_oklab,var(--foreground)_6%,transparent)_1px,transparent_1px)] bg-[size:24px_24px] [mask-image:linear-gradient(to_bottom,black,transparent_75%)]"
+      />
+    </>
+  );
+}
+
+function Logo({ src, alt }: { src: string; alt: string }) {
+  return (
+    <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border bg-white">
+      {/* biome-ignore lint/performance/noImgElement: ícone estático de 20px em public/, next/image não traz ganho aqui */}
+      <img src={src} alt={alt} className="size-5 rounded-[3px] object-contain" />
     </div>
   );
 }
