@@ -1,9 +1,7 @@
-import { GoogleCalendarView } from "@/components/google-calendar-view";
+import { getSessionUser } from "@/lib/session";
+import { TodayView } from "@/components/today/today-view";
 
-export default function Home() {
-  return (
-    <div className="flex flex-1 flex-col p-6">
-      <GoogleCalendarView />
-    </div>
-  );
+export default async function Home() {
+  const user = await getSessionUser();
+  return <TodayView name={user?.name} />;
 }

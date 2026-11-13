@@ -10,10 +10,10 @@ export function BottomNav() {
 
   return (
     <nav
-      className="shrink-0 border-t bg-background/95 backdrop-blur-sm md:hidden"
+      className="shrink-0 border-t bg-background/50 backdrop-blur-md md:hidden"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      <div className="grid h-16 grid-cols-4">
+      <div className="grid h-16 grid-cols-5">
         {navItems.map((item) => {
           const isActive = pathname === item.href;
           return (
@@ -27,10 +27,17 @@ export function BottomNav() {
                   : "text-muted-foreground active:text-foreground"
               )}
             >
-              <item.icon
-                strokeWidth={isActive ? 2.5 : 1.75}
-                className="size-[22px]"
-              />
+              <span
+                className={cn(
+                  "flex items-center justify-center rounded-full border px-3 py-1",
+                  isActive ? "border-foreground/20 bg-foreground/10" : "border-transparent"
+                )}
+              >
+                <item.icon
+                  strokeWidth={isActive ? 2.5 : 1.75}
+                  className="size-[22px]"
+                />
+              </span>
               <span className="text-[10px] font-medium leading-none">
                 {item.title}
               </span>
