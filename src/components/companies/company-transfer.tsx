@@ -44,11 +44,18 @@ export function TransferCard({
     <parts.Item
       value={value}
       className={cn(
-        "relative h-full transition-opacity data-dragging:opacity-40 data-grabbed:opacity-60 data-grabbed:ring-2 data-grabbed:ring-primary/50 data-grabbed:rounded-lg",
+        "group/transfer relative h-full rounded-lg transition-[opacity,box-shadow] data-dragging:opacity-40 data-grabbed:opacity-60 data-grabbed:ring-2 data-grabbed:ring-primary/50",
+        "data-combining:ring-2 data-combining:ring-primary data-combining:ring-offset-2 data-combining:ring-offset-background",
         className,
       )}
     >
       {children}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-2 z-10 mx-auto hidden w-fit rounded-md bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground shadow group-data-combining/transfer:block"
+      >
+        Soltar para criar grupo
+      </span>
       <parts.Handle
         value={value}
         aria-label={`Mover ${label} para outro grupo`}

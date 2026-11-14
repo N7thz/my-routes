@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
 import type { CompanyRecord, CompanyUpdateInput, CompanyCreateInput, NotionPageResult } from "@/lib/company-service";
 
-const COMPANIES_KEY = ["companies"] as const;
+export const COMPANIES_KEY = ["companies"] as const;
 export const COMPANY_GROUPS_KEY = ["company-groups"] as const;
 
 /**

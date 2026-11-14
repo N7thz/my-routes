@@ -1,7 +1,11 @@
 import {
+  bindDrag,
+  bindDragPreview,
+  createAutoScroll,
   createChange,
   createTransfer,
   definePrimitive,
+  dragThreshold,
   keepFocus,
   transferMessage,
   type ChangeDetails,
@@ -19,13 +23,31 @@ type CompanyTransferOptions = {
   groupLabel?: (id: string) => string | undefined;
   /** Chamado ao soltar a empresa em outra seção. `groupId` é `null` para "Sem grupo". */
   onMove?: (companyId: string, groupId: string | null) => void;
+  /**
+   * Se soltar `companyId` em cima do cartão `targetId` junta os dois num grupo
+   * novo. Só vale para cartões da mesma seção. Sem ela, não há junção.
+   */
+  canCombine?: (companyId: string, targetId: string) => boolean;
+  /** Chamado ao soltar uma empresa em cima de outra que `canCombine` aceita. */
+  onCombine?: (companyId: string, targetId: string) => void;
   onListsChange?: (
     lists: TransferLists,
     details: ChangeDetails<TransferReason> & { key: string; from: string; to: string; index: number },
   ) => void;
 };
 
-type CompanyTransferState = { lists: TransferLists; moving: TransferDraft | null };
+type CompanyTransferState = {
+  lists: TransferLists;
+  moving: TransferDraft | null;
+  /** Cartão sob o ponteiro que vira grupo com o arrastado, se soltar agora. */
+  combining: string | null;
+};
+
+const contains = (el: HTMLElement | undefined, x: number, y: number) => {
+  if (!el?.isConnected) return false;
+  const r = el.getBoundingClientRect();
+  return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+};
 
 const ptMessage = ({ type, label, list, position, total }: Parameters<typeof transferMessage>[0]) => {
   switch (type) {
@@ -47,10 +69,16 @@ const companyTransfer = definePrimitive({
     companyLabel: "callback",
     groupLabel: "callback",
     onMove: "callback",
+    canCombine: "callback",
+    onCombine: "callback",
     onListsChange: "callback",
   },
   controlled: ["lists"],
-  state: (options: CompanyTransferOptions): CompanyTransferState => ({ lists: options.lists ?? {}, moving: null }),
+  state: (options: CompanyTransferOptions): CompanyTransferState => ({
+    lists: options.lists ?? {},
+    moving: null,
+    combining: null,
+  }),
   sync: (options) => (options.lists === undefined ? {} : { lists: options.lists }),
   api: (context) => {
     const change = createChange(context);
@@ -70,7 +98,136 @@ const companyTransfer = definePrimitive({
       listLabel: (list) => context.options().groupLabel?.(list),
       message: ptMessage,
     });
-    return { transfer, handles };
+
+    // Arraste pelo ponteiro próprio (em vez de `transfer.pointerdown`): na seção
+    // de origem o cartão fica parado, para dar para soltar em cima de outro
+    // cartão e juntar os dois; nas outras seções ele entra como no createTransfer.
+    const items = new Map<string, HTMLElement>();
+    const lists = new Map<string, HTMLElement>();
+    let stop: (() => void) | undefined;
+    context.onDestroy(() => stop?.());
+
+    function listAt(x: number, y: number) {
+      let best: { list: string; distance: number } | undefined;
+      for (const [list, el] of lists) {
+        if (!el.isConnected) continue;
+        const r = el.getBoundingClientRect();
+        const dx = x < r.left ? r.left - x : x > r.right ? x - r.right : 0;
+        const dy = y < r.top ? r.top - y : y > r.bottom ? y - r.bottom : 0;
+        const distance = Math.hypot(dx, dy);
+        if (!best || distance < best.distance) best = { list, distance };
+      }
+      return best?.list;
+    }
+
+    function pointerdown(event: PointerEvent, key: string) {
+      const { store } = context;
+      const start = items.get(key);
+      if (!start || event.button !== 0 || store.get().moving) return;
+      stop?.();
+
+      let pointer = { x: event.clientX, y: event.clientY };
+      let dragging = false;
+      let preview: ReturnType<typeof bindDragPreview> | undefined;
+      let origin: { list: string; index: number } | undefined;
+
+      const setCombining = (target: string | null) => {
+        if (store.get().combining !== target) store.set({ combining: target });
+      };
+
+      const track = () => {
+        const current = store.get().moving;
+        const list = listAt(pointer.x, pointer.y);
+        if (!current || !origin || list === undefined) return;
+
+        if (list === origin.list) {
+          const { canCombine } = context.options();
+          const target = canCombine
+            ? (current.lists[list] ?? []).find(
+                (k) => k !== key && contains(items.get(k), pointer.x, pointer.y) && canCombine(key, k),
+              )
+            : undefined;
+          setCombining(target ?? null);
+          transfer.moveTo(origin.list, origin.index);
+          return;
+        }
+
+        setCombining(null);
+        const middles = (current.lists[list] ?? [])
+          .filter((k) => k !== key)
+          .map((k) => {
+            const r = items.get(k)?.getBoundingClientRect();
+            return r ? r.top + r.height / 2 : 0;
+          });
+        transfer.moveTo(list, middles.filter((m) => m < pointer.y).length);
+      };
+
+      const scroller = createAutoScroll({ ignore: () => items.get(key), onScroll: track });
+
+      stop = bindDrag(start, event, {
+        threshold: dragThreshold,
+        cancelOnEscape: true,
+        onStart: () => {
+          const now = store.get().lists;
+          const from = Object.keys(now).find((list) => now[list].includes(key));
+          if (from === undefined) return false;
+          origin = { list: from, index: now[from].indexOf(key) };
+          // Rascunho com `pointer: true`, como o `transfer.pointerdown`: marca
+          // `data-dragging` e não puxa o foco a cada movimento.
+          store.set({ moving: { key, from, lists: now, pointer: true }, combining: null });
+          preview = bindDragPreview(start, { x: event.clientX, y: event.clientY });
+          preview.el.removeAttribute("data-dragging");
+          preview.el.removeAttribute("data-grabbed");
+          dragging = true;
+        },
+        onMove: ({ x, y, event: moveEvent }) => {
+          moveEvent.preventDefault();
+          pointer = { x, y };
+          preview?.move(x, y);
+          scroller.update(x, y);
+          track();
+        },
+        onEnd: (endEvent, canceled) => {
+          scroller.stop();
+          preview?.remove();
+          preview = undefined;
+          if (!dragging) return;
+          dragging = false;
+          const target = store.get().combining;
+          setCombining(null);
+          if (canceled) {
+            transfer.cancel();
+          } else if (target) {
+            transfer.cancel();
+            context.options().onCombine?.(key, target);
+          } else {
+            transfer.drop(endEvent);
+          }
+        },
+      });
+    }
+
+    return {
+      transfer,
+      handles,
+      pointerdown,
+      bindList: (el: HTMLElement, list: string) => {
+        lists.set(list, el);
+        const off = transfer.bindList(el, list);
+        return () => {
+          if (lists.get(list) === el) lists.delete(list);
+          off();
+        };
+      },
+      bindItem: (el: HTMLElement, key: string) => {
+        items.set(key, el);
+        const off = transfer.bindItem(el, key);
+        return () => {
+          if (items.get(key) === el) items.delete(key);
+          off();
+        };
+      },
+    };
   },
   slots: (slot) => ({
     root: slot<object, { lists: TransferLists; dragging: boolean }>({
@@ -88,19 +245,21 @@ const companyTransfer = definePrimitive({
             ? ""
             : undefined,
       }),
-      bind: (el, { api, props }) => api.transfer.bindList(el, props.value),
+      bind: (el, { api, props }) => api.bindList(el, props.value),
     }),
-    item: slot<{ value: string }, { grabbed: boolean; dragging: boolean }>({
+    item: slot<{ value: string }, { grabbed: boolean; dragging: boolean; combining: boolean }>({
       props: { value: "string" },
       state: (state, { key, api }) => ({
         grabbed: api.transfer.moving(state, key),
         dragging: api.transfer.dragging(state, key),
+        combining: state.combining === key,
       }),
       attrs: (state, { key, api }) => ({
         "data-grabbed": api.transfer.moving(state, key) ? "" : undefined,
         "data-dragging": api.transfer.dragging(state, key) ? "" : undefined,
+        "data-combining": state.combining === key ? "" : undefined,
       }),
-      bind: (el, { api, props }) => api.transfer.bindItem(el, props.value),
+      bind: (el, { api, props }) => api.bindItem(el, props.value),
     }),
     handle: slot<{ value: string }>({
       props: { value: "string" },
@@ -116,7 +275,7 @@ const companyTransfer = definePrimitive({
             keepFocus(() => api.handles.get(key));
           }
         },
-        pointerdown: (event, { key, api }) => api.transfer.pointerdown(event, key),
+        pointerdown: (event, { key, api }) => api.pointerdown(event, key),
       },
       bind: (el, { api, props }) => {
         api.handles.set(props.value, el);

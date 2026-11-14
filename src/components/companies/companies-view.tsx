@@ -16,8 +16,8 @@ import { cn } from "@/lib/utils";
 import { useCompanies, useMoveCompanyToGroup } from "@/hooks/use-companies";
 import { useRememberedFilters } from "@/hooks/use-remembered-filters";
 import { type FilterPreset, SavedFiltersMenu } from "@/components/saved-filters-menu";
-import { useCompanyGroups } from "@/hooks/use-company-groups";
-import { CompanyGroupsDialog, GroupDot } from "@/components/company-groups-dialog";
+import { type CompanyGroupRecord, useCompanyGroups, useCreateGroupWith } from "@/hooks/use-company-groups";
+import { CompanyGroupsDialog, GROUP_COLORS, GroupDot } from "@/components/company-groups-dialog";
 import { useGoogleCalendar } from "@/hooks/use-google-calendar";
 import type { CompanyStatus } from "@/lib/company-service";
 import { Badge } from "@/components/ui/badge";
@@ -130,6 +130,7 @@ export function CompaniesView() {
   const [groupBy, setGroupBy] = useQueryState("groupBy", PREF_PARSERS.groupBy);
   const [periodFilter, setPeriodFilter] = useQueryState("periodo", PREF_PARSERS.periodo);
   const [managingGroups, setManagingGroups] = useState(false);
+  const [newGroup, setNewGroup] = useState<CompanyGroupRecord | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
   const [creatingCompany, setCreatingCompany] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState<EnrichedCompany | null>(null);
@@ -249,7 +250,25 @@ export function CompaniesView() {
     : [];
 
   const moveToGroup = useMoveCompanyToGroup();
+  const createGroupWith = useCreateGroupWith();
   const canDrag = groupBy && viewMode === "cards";
+
+  /** Soltar um cartão sem grupo em cima de outro sem grupo cria um grupo com os dois e abre a edição dele. */
+  async function combineIntoNewGroup(companyId: string, targetId: string) {
+    const names = new Set(groups.map((g) => g.name.toLowerCase()));
+    let name = "Novo grupo";
+    for (let n = 2; names.has(name.toLowerCase()); n++) name = `Novo grupo ${n}`;
+    const used = new Set(groups.map((g) => g.color));
+    const color = GROUP_COLORS.find((c) => !used.has(c)) ?? GROUP_COLORS[groups.length % GROUP_COLORS.length];
+    const group = await createGroupWith.mutateAsync({ name, color, companyIds: [targetId, companyId] });
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      next.delete(group.id);
+      return next;
+    });
+    setNewGroup(group);
+    setManagingGroups(true);
+  }
   const companiesById = new Map(filtered.map((c) => [c.id, c]));
   const transferLists = Object.fromEntries(sections.map((s) => [s.key, s.items.map((c) => c.id)]));
 
@@ -287,8 +306,12 @@ export function CompaniesView() {
     <>
       <CompanyGroupsDialog
         open={managingGroups}
-        onClose={() => setManagingGroups(false)}
+        onClose={() => {
+          setManagingGroups(false);
+          setNewGroup(null);
+        }}
         companies={companiesData ?? []}
+        initialEditing={newGroup}
       />
       <CompanyFormDialog mode="create" open={creatingCompany} onClose={() => setCreatingCompany(false)} />
       <CompanyFormDialog
@@ -356,7 +379,7 @@ export function CompaniesView() {
             <Button
               variant={groupBy ? "secondary" : "ghost"}
               size="icon"
-              className="size-8"
+              className="size-8 pointer-coarse:size-10"
               onClick={() => setGroupBy(groupBy ? null : true)}
               title={groupBy ? "Desagrupar" : "Agrupar por grupo"}
             >
@@ -385,7 +408,7 @@ export function CompaniesView() {
               <Button
                 variant={viewMode === "cards" ? "secondary" : "ghost"}
                 size="icon"
-                className="size-8"
+                className="size-8 pointer-coarse:size-10"
                 onClick={() => setViewMode("cards")}
                 title="Cards"
               >
@@ -394,7 +417,7 @@ export function CompaniesView() {
               <Button
                 variant={viewMode === "table" ? "secondary" : "ghost"}
                 size="icon"
-                className="size-8"
+                className="size-8 pointer-coarse:size-10"
                 onClick={() => setViewMode("table")}
                 title="Tabela"
               >
@@ -498,17 +521,27 @@ export function CompaniesView() {
             companyLabel={(id) => filtered.find((c) => c.id === id)?.name}
             groupLabel={(id) => sections.find((s) => s.key === id)?.label}
             onMove={(id, groupId) => moveToGroup.mutate({ id, groupId })}
+            canCombine={(id, targetId) =>
+              companiesById.get(id)?.groupId == null && companiesById.get(targetId)?.groupId == null
+            }
+            onCombine={(id, targetId) => {
+              combineIntoNewGroup(id, targetId).catch(() => {});
+            }}
             className="flex flex-col gap-6"
           >
             {({ lists }) => (
               <>
                 {canDrag && (
                   <p className="-mb-2 text-xs text-muted-foreground">
-                    Arraste a alça do cartão para outro grupo para mudar o grupo da empresa. Pelo teclado: foque a alça,
-                    espaço para pegar, setas para mover e espaço para soltar.
+                    Arraste a alça do cartão para outro grupo para mudar o grupo da empresa. Solte uma empresa sem grupo
+                    em cima de outra sem grupo para criar um grupo com as duas. Pelo teclado: foque a alça, espaço para
+                    pegar, setas para mover e espaço para soltar.
                   </p>
                 )}
                 {moveToGroup.isError && <p className="-mb-2 text-xs text-destructive">{moveToGroup.error.message}</p>}
+                {createGroupWith.isError && (
+                  <p className="-mb-2 text-xs text-destructive">{createGroupWith.error.message}</p>
+                )}
                 {sections.map((section) => {
                   const collapsed = collapsedGroups.has(section.key);
                   return (
@@ -611,7 +644,8 @@ export function CompaniesView() {
               <Button
                 variant="ghost"
                 size="icon"
-                className="size-8"
+                className="size-8 pointer-coarse:size-10"
+                aria-label="Página anterior"
                 disabled={safePage <= 1}
                 onClick={() => setPage(safePage - 1)}
               >
@@ -623,7 +657,8 @@ export function CompaniesView() {
               <Button
                 variant="ghost"
                 size="icon"
-                className="size-8"
+                className="size-8 pointer-coarse:size-10"
+                aria-label="Próxima página"
                 disabled={safePage >= totalPages}
                 onClick={() => setPage(safePage + 1)}
               >

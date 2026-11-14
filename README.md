@@ -38,34 +38,34 @@ bun run dev
 
 ### Variáveis de ambiente (`.env`)
 
-| Variável | Para quê |
-| --- | --- |
-| `DATABASE_URL` | Conexão do Postgres (pooler) |
-| `DIRECT_URL` | Conexão direta, usada pelas migrations |
-| `NEXT_PUBLIC_APP_URL` | URL pública do app (auth e callbacks) |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Login e acesso ao Google Calendar |
-| `ALLOWED_EMAILS` | E-mails autorizados a entrar (separados por vírgula) |
-| `ADMIN_EMAILS` | E-mails com acesso à área de admin |
-| `GEOAPIFY_API_KEY` | Geocodificação |
-| `NEXT_PUBLIC_MAPTILER_KEY` | Tiles do mapa |
-| `NOTION_CLIENT_ID` / `NOTION_CLIENT_SECRET` | OAuth do Notion |
-| `NOTION_COMPANIES_DB_ID` / `NOTION_INSPECTION_TEMPLATE_ID` | Base de empresas e template de vistoria no Notion |
-| `CRON_SECRET` | Protege `/api/cron/sync-routes` |
-| `CRON_USER_EMAIL` | Usuário que o cron sempre processa |
+| Variável                                                   | Para quê                                             |
+| ---------------------------------------------------------- | ---------------------------------------------------- |
+| `DATABASE_URL`                                             | Conexão do Postgres (pooler)                         |
+| `DIRECT_URL`                                               | Conexão direta, usada pelas migrations               |
+| `NEXT_PUBLIC_APP_URL`                                      | URL pública do app (auth e callbacks)                |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`                | Login e acesso ao Google Calendar                    |
+| `ALLOWED_EMAILS`                                           | E-mails autorizados a entrar (separados por vírgula) |
+| `ADMIN_EMAILS`                                             | E-mails com acesso à área de admin                   |
+| `GEOAPIFY_API_KEY`                                         | Geocodificação                                       |
+| `NEXT_PUBLIC_MAPTILER_KEY`                                 | Tiles do mapa                                        |
+| `NOTION_CLIENT_ID` / `NOTION_CLIENT_SECRET`                | OAuth do Notion                                      |
+| `NOTION_COMPANIES_DB_ID` / `NOTION_INSPECTION_TEMPLATE_ID` | Base de empresas e template de vistoria no Notion    |
+| `CRON_SECRET`                                              | Protege `/api/cron/sync-routes`                      |
+| `CRON_USER_EMAIL`                                          | Usuário que o cron sempre processa                   |
 
 ## Scripts
 
-| Comando | O que faz |
-| --- | --- |
-| `bun run dev` / `build` / `start` | Desenvolvimento, build (com `prisma generate`) e produção |
-| `bun run lint` / `lint:fix` / `format` | Biome |
-| `bun test` | Testes |
-| `bun run db:migrate` | Cria e aplica migration em dev |
-| `bun run db:migrate:create` | Só cria a migration |
-| `bun run db:diff` | SQL da diferença entre o banco e o schema |
-| `bun run db:deploy` / `db:status` | Aplica migrations pendentes / mostra o estado |
-| `bun run db:studio` | Prisma Studio |
-| `bun run db:seed` | Seed do banco |
+| Comando                                | O que faz                                                 |
+| -------------------------------------- | --------------------------------------------------------- |
+| `bun run dev` / `build` / `start`      | Desenvolvimento, build (com `prisma generate`) e produção |
+| `bun run lint` / `lint:fix` / `format` | Biome                                                     |
+| `bun test`                             | Testes                                                    |
+| `bun run db:migrate`                   | Cria e aplica migration em dev                            |
+| `bun run db:migrate:create`            | Só cria a migration                                       |
+| `bun run db:diff`                      | SQL da diferença entre o banco e o schema                 |
+| `bun run db:deploy` / `db:status`      | Aplica migrations pendentes / mostra o estado             |
+| `bun run db:studio`                    | Prisma Studio                                             |
+| `bun run db:seed`                      | Seed do banco                                             |
 
 Scripts avulsos de migração e enriquecimento de dados ficam em `scripts/`.
 

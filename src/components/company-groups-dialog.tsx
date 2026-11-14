@@ -14,13 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,14 +25,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  ArrowLeftIcon,
-  CheckIcon,
-  FolderPlusIcon,
-  PencilIcon,
-  SearchIcon,
-  Trash2Icon,
-} from "lucide-react";
+import { ArrowLeftIcon, CheckIcon, FolderPlusIcon, PencilIcon, SearchIcon, Trash2Icon } from "lucide-react";
 
 export const GROUP_COLORS = [
   "#3b82f6",
@@ -76,7 +63,7 @@ function GroupForm({
   const [name, setName] = useState(group?.name ?? "");
   const [color, setColor] = useState<string>(group?.color ?? GROUP_COLORS[0]);
   const [selected, setSelected] = useState<Set<string>>(
-    () => new Set(group ? companies.filter((c) => c.groupId === group.id).map((c) => c.id) : [])
+    () => new Set(group ? companies.filter((c) => c.groupId === group.id).map((c) => c.id) : []),
   );
   const [search, setSearch] = useState("");
 
@@ -126,7 +113,7 @@ function GroupForm({
               title={c}
               className={cn(
                 "size-7 rounded-full flex items-center justify-center ring-offset-2 ring-offset-background transition",
-                color === c ? "ring-2 ring-foreground" : "hover:scale-110"
+                color === c ? "ring-2 ring-foreground" : "hover:scale-110",
               )}
               style={{ backgroundColor: c }}
             >
@@ -139,7 +126,9 @@ function GroupForm({
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between">
           <Label>Empresas</Label>
-          <span className="text-xs text-muted-foreground">{selected.size} selecionada{selected.size !== 1 ? "s" : ""}</span>
+          <span className="text-xs text-muted-foreground">
+            {selected.size} selecionada{selected.size !== 1 ? "s" : ""}
+          </span>
         </div>
         <div className="relative">
           <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
@@ -167,15 +156,13 @@ function GroupForm({
                   <span
                     className={cn(
                       "size-4 rounded border flex items-center justify-center shrink-0",
-                      checked ? "bg-primary border-primary text-primary-foreground" : "border-input"
+                      checked ? "bg-primary border-primary text-primary-foreground" : "border-input",
                     )}
                   >
                     {checked && <CheckIcon className="size-3" />}
                   </span>
                   <span className="truncate flex-1">{c.name}</span>
-                  {inOtherGroup && (
-                    <span className="text-[10px] text-muted-foreground shrink-0">em outro grupo</span>
-                  )}
+                  {inOtherGroup && <span className="text-xs text-muted-foreground shrink-0">em outro grupo</span>}
                 </button>
               );
             })
@@ -204,15 +191,24 @@ export function CompanyGroupsDialog({
   open,
   onClose,
   companies,
+  initialEditing = null,
 }: {
   open: boolean;
   onClose: () => void;
   companies: CompanyRecord[];
+  /** Abre direto no formulário desse grupo (ex.: o grupo recém-criado ao juntar dois cartões). */
+  initialEditing?: CompanyGroupRecord | null;
 }) {
   const { data: groups = [], isLoading } = useCompanyGroups();
   const del = useDeleteCompanyGroup();
   // null = listagem; "new" = criando; objeto = editando
-  const [editing, setEditing] = useState<CompanyGroupRecord | "new" | null>(null);
+  const [editing, setEditing] = useState<CompanyGroupRecord | "new" | null>(initialEditing);
+  // Troca de grupo inicial com o diálogo montado: ajusta durante o render.
+  const [shownInitial, setShownInitial] = useState(initialEditing);
+  if (initialEditing !== shownInitial) {
+    setShownInitial(initialEditing);
+    if (initialEditing) setEditing(initialEditing);
+  }
   const [deleting, setDeleting] = useState<CompanyGroupRecord | null>(null);
 
   function handleOpenChange(o: boolean) {
@@ -255,7 +251,8 @@ export function CompanyGroupsDialog({
               key={editing === "new" ? "new" : editing.id}
               group={editing === "new" ? null : editing}
               companies={companies}
-              onDone={() => setEditing(null)}
+              // Veio direto para o formulário (grupo recém-criado): ao terminar, fecha.
+              onDone={() => (shownInitial && editing === shownInitial ? handleOpenChange(false) : setEditing(null))}
             />
           ) : (
             <div className="flex flex-col gap-3">
@@ -271,10 +268,7 @@ export function CompanyGroupsDialog({
               ) : (
                 <div className="flex flex-col gap-1.5 max-h-80 overflow-y-auto pr-1">
                   {groups.map((g) => (
-                    <div
-                      key={g.id}
-                      className="flex items-center gap-3 px-3 py-2 rounded-md border"
-                    >
+                    <div key={g.id} className="flex items-center gap-3 px-3 py-2 rounded-md border">
                       <GroupDot color={g.color} className="size-2.5" />
                       <div className="flex flex-col min-w-0 flex-1">
                         <span className="text-sm font-medium truncate">{g.name}</span>
@@ -318,8 +312,8 @@ export function CompanyGroupsDialog({
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir grupo?</AlertDialogTitle>
             <AlertDialogDescription>
-              O grupo <strong>{deleting?.name}</strong> será removido. As empresas dele não são
-              excluídas — só ficam sem grupo.
+              O grupo <strong>{deleting?.name}</strong> será removido. As empresas dele não são excluídas — só ficam sem
+              grupo.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
