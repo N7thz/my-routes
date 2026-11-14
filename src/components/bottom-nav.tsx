@@ -38,7 +38,7 @@ export function BottomNav() {
                   className="size-[22px]"
                 />
               </span>
-              <span className="text-[10px] font-medium leading-none">
+              <span className="text-xs font-medium leading-none">
                 {item.title}
               </span>
             </Link>

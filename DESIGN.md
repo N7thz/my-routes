@@ -158,6 +158,10 @@ Preto, branco e degraus neutros; saturação apenas como sinal.
 - **Sinal Verde** (`signal-green`, família emerald do Tailwind): concluído, sucesso, valor positivo. Use `emerald-700` no claro e `emerald-400/500` no escuro para texto.
 - **Sinal Âmbar** (`signal-amber`, família amber do Tailwind): atenção, pendente, endereço não encontrado. Use `amber-700` no claro e `amber-400` no escuro para texto.
 
+### Exceções (cor que é dado, não estilo)
+- **Cor de grupo:** cada grupo de empresas tem uma cor escolhida pelo usuário numa paleta fixa (`company-groups-dialog.tsx`). Ela é dado categórico, para reconhecer o grupo de relance, e aparece só como ponto ou marcador pequeno ao lado do nome, nunca como fundo de cartão, botão ou texto.
+- **Marca de terceiros:** as cores do Google aparecem só no logo do botão "Entrar com Google" e no seletor de fonte da agenda, que identifica de onde vem o evento. Fora desses pontos, eventos e fontes usam neutros.
+
 ### Named Rules
 **The No Brand Color Rule.** Não existe cor de destaque. Botão primário é giz sobre noite (ou tinta sobre papel). Nunca introduza um azul, roxo ou gradiente colorido como "cor da marca".
 

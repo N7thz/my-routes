@@ -387,7 +387,7 @@ export default async function PerfilPage({ searchParams }: { searchParams: Promi
               description={
                 c.status === "missing" ? (
                   <>
-                    {c.desc} Defina <code className="font-mono text-[11px]">{c.envHint}</code> no ambiente.
+                    {c.desc} Defina <code className="font-mono text-xs">{c.envHint}</code> no ambiente.
                   </>
                 ) : (
                   c.desc

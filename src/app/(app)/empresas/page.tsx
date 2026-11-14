@@ -21,6 +21,7 @@ export default async function EmpresasPage() {
 
   return (
     <div className="flex flex-1 flex-col p-6">
+      <h1 className="mb-4 text-2xl font-bold tracking-tight">Empresas</h1>
       <Suspense>
         <CompaniesView />
       </Suspense>

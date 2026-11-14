@@ -1,0 +1,35 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "gradient-text",
+        "value": "*",
+        "files": [
+          "src/app/globals.css"
+        ],
+        "createdAt": "2026-11-14T12:22:09.113Z",
+        "reason": "DESIGN.md: texto em gradiente só no hero do login"
+      },
+      {
+        "rule": "codex-grid-background",
+        "value": "*",
+        "files": [
+          "src/app/globals.css"
+        ],
+        "createdAt": "2026-11-14T12:26:08.342Z",
+        "reason": "Exceção do DESIGN.md (Layout): atmosfera fixa com grade de 40px a 4,5% atrás do app; verificado no audit de 2026-11-14"
+      },
+      {
+        "rule": "design-system-radius",
+        "value": "0.5rem",
+        "files": [
+          "src/app/globals.css"
+        ],
+        "createdAt": "2026-11-14T12:26:08.471Z",
+        "reason": "Exceção do DESIGN.md (Calendário): eventos do FullCalendar com 8px de canto; verificado no audit de 2026-11-14"
+      }
+    ]
+  }
+}

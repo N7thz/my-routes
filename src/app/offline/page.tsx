@@ -10,7 +10,7 @@ export default function OfflinePage() {
         <WifiOffIcon className="size-8 text-muted-foreground/60" />
       </div>
       <div>
-        <p className="font-semibold">Você está offline</p>
+        <h1 className="text-lg font-semibold">Você está offline</h1>
         <p className="mt-1 max-w-xs text-sm text-muted-foreground">
           Esta página ainda não foi salva para uso offline. Abra uma página já
           visitada (Rotas, Empresas) ou reconecte-se à internet.

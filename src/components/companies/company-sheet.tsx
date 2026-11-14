@@ -84,7 +84,7 @@ export function CompanySheet({
               <Button
                 variant="ghost"
                 size="icon"
-                className="size-7"
+                className="size-7 pointer-coarse:size-10"
                 onClick={handleNotion}
                 disabled={createNotionPage.isPending}
                 title={notionUrl ? "Abrir no Notion" : "Criar página no Notion"}
@@ -100,19 +100,19 @@ export function CompanySheet({
               <Button
                 variant="ghost"
                 size="icon"
-                className="size-7"
+                className="size-7 pointer-coarse:size-10"
                 onClick={() => onAddToRoute(company)}
                 title="Adicionar à rota"
               >
                 <RouteIcon className="size-3.5" />
               </Button>
-              <Button variant="ghost" size="icon" className="size-7" onClick={() => onEdit(company)} title="Editar">
+              <Button variant="ghost" size="icon" className="size-7 pointer-coarse:size-10" onClick={() => onEdit(company)} title="Editar">
                 <PencilIcon className="size-3.5" />
               </Button>
               <Button
                 variant="ghost"
                 size="icon"
-                className="size-7 text-destructive hover:text-destructive"
+                className="size-7 pointer-coarse:size-10 text-destructive hover:text-destructive"
                 onClick={() => onDelete(company)}
                 title="Excluir"
               >
@@ -215,7 +215,7 @@ function EventRow({ event }: { event: CalendarEvent }) {
       rel="noopener noreferrer"
       className="flex items-start gap-3 px-1 py-2 hover:bg-muted/50 rounded-md transition-colors group"
     >
-      <div className="size-1.5 rounded-full bg-blue-500 mt-2 shrink-0" />
+      <div className="size-1.5 rounded-full bg-muted-foreground mt-2 shrink-0" />
       <div className="flex flex-col gap-0.5 min-w-0 flex-1">
         <span className="text-sm line-clamp-1 group-hover:underline">{event.summary}</span>
         {event.location && <span className="text-xs text-muted-foreground line-clamp-1">{event.location}</span>}

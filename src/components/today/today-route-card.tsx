@@ -67,7 +67,7 @@ export function TodayRouteCard({ route }: { route: RouteRecord }) {
 
         {next ? (
           <div className="flex flex-col gap-3 rounded-lg border bg-muted/40 p-3">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Próxima parada
             </p>
             <div className="flex items-start gap-2">
