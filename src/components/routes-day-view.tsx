@@ -12,15 +12,31 @@ import { signIn } from "@/lib/auth-client";
 import type { RouteStatus } from "@/lib/route-service";
 import { RouteMap } from "@/components/route-map";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { CalendarSyncIcon, ListIcon, Loader2Icon, MapIcon, Settings2Icon, SparklesIcon } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  CalendarSyncIcon,
+  EllipsisIcon,
+  ListIcon,
+  Loader2Icon,
+  MapIcon,
+  Settings2Icon,
+  SparklesIcon,
+  XIcon,
+} from "lucide-react";
 import { RoutesView } from "@/components/routes-view";
-import { UNDATED, relativeDayLabel } from "@/components/routes/day-labels";
+import { UNDATED, relativeDayLabel, visitedTimeLabel } from "@/components/routes/day-labels";
 import { DayNavigator } from "@/components/routes/day-navigator";
 import { EmptyDay, EmptyState } from "@/components/routes/day-empty-states";
 import { RoutePicker } from "@/components/routes/route-picker";
 import { RouteTitle } from "@/components/routes/route-title";
-import { ProgressBar, StopsPanel } from "@/components/routes/stops-panel";
+import { StopsPanel } from "@/components/routes/stops-panel";
 
 export function RoutesDayView({ userImage }: { userImage?: string | null }) {
   const { data: days = [], isLoading: daysLoading } = useRouteDays();
@@ -29,7 +45,7 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
   const reorder = useReorderStops();
   // Roda uma vez ao abrir a página (com throttle) e alimenta o botão manual.
   const syncCalendar = useAutoSyncCalendarRoutes();
-  // "Gerar agora": Runrunit + agenda + ordem otimizada, sem esperar o cron.
+  // "Gerar agora": empresas agendadas + agenda + ordem otimizada, sem esperar o cron.
   const autoRoute = useRunAutoRoute();
   const { resolvedTheme } = useTheme();
 
@@ -39,6 +55,15 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
   const [loadingStopId, setLoadingStopId] = useState<string | null>(null);
   const [mobileTab, setMobileTab] = useState<"stops" | "map">("stops");
   const [manageOpen, setManageOpen] = useState(false);
+  // Ordem anterior à última reordenação, para o "Desfazer".
+  const [undoVisit, setUndoVisit] = useState<{
+    routeId: string;
+    stopId: string;
+    name: string;
+    visited: boolean;
+    at: Date;
+  } | null>(null);
+  const [undoReorder, setUndoReorder] = useState<{ routeId: string; orderedIds: string[] } | null>(null);
 
   // A navegação usa a lista leve de dias (todo o histórico); as rotas em si só
   // vêm da janela em volta do dia aberto.
@@ -59,6 +84,8 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
 
   const route = routesOfDay.find((r) => r.id === selectedRouteId) ?? routesOfDay[0] ?? null;
+  // Hoje (ou dia passado) é execução; dia futuro ou sem data é planejamento.
+  const mode: "run" | "plan" = effectiveDay !== UNDATED && effectiveDay <= today ? "run" : "plan";
 
   const canPrev = effectiveDay === UNDATED ? routeDays.length > 0 : routeDays.some((d) => d < effectiveDay);
   const canNext = effectiveDay === UNDATED ? false : routeDays.some((d) => d > effectiveDay) || hasUndated;
@@ -82,14 +109,21 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
     else if (hasUndated) goToDay(UNDATED);
   }
 
-  const visitedCount = route?.stops.filter((s) => s.visitedAt).length ?? 0;
-  const totalCount = route?.stops.length ?? 0;
-  const progress = totalCount > 0 ? (visitedCount / totalCount) * 100 : 0;
-
-  function handleToggle(stopId: string, visited: boolean) {
+  function handleToggle(stopId: string, visited: boolean, { remember = true } = {}) {
     if (!route) return;
     setLoadingStopId(stopId);
     markVisited.mutate({ routeId: route.id, stopId, visited }, { onSettled: () => setLoadingStopId(null) });
+    // Toque errado com o dedo na rua: o aviso abaixo da barra oferece desfazer.
+    if (remember) {
+      const stop = route.stops.find((s) => s.id === stopId);
+      const name = stop?.label ?? stop?.company?.name ?? "Parada";
+      setUndoVisit({ routeId: route.id, stopId, name, visited, at: new Date() });
+      setUndoReorder(null);
+    }
+    // Primeira visita do dia tira a rota do rascunho sozinha (automático antes de manual).
+    if (visited && route.status === "RASCUNHO" && mode === "run") {
+      updateRoute.mutate({ id: route.id, data: { status: "EM_ANDAMENTO" } });
+    }
   }
 
   function handleStatusChange(status: RouteStatus) {
@@ -97,14 +131,34 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
     updateRoute.mutate({ id: route.id, data: { status } });
   }
 
-  function moveStop(index: number, dir: -1 | 1) {
-    if (!route) return;
-    const ids = route.stops.map((s) => s.id);
-    const j = index + dir;
-    if (j < 0 || j >= ids.length) return;
-    [ids[index], ids[j]] = [ids[j], ids[index]];
+  function reorderStops(from: number, to: number) {
+    if (!route || from === to || to < 0 || to >= route.stops.length) return;
+    const before = route.stops.map((s) => s.id);
+    const ids = [...before];
+    const [moved] = ids.splice(from, 1);
+    ids.splice(to, 0, moved);
     reorder.mutate({ routeId: route.id, orderedIds: ids });
+    setUndoReorder({ routeId: route.id, orderedIds: before });
+    setUndoVisit(null);
   }
+
+  function moveStop(index: number, dir: -1 | 1) {
+    reorderStops(index, index + dir);
+  }
+
+  // Fica fora dos ramos para abrir também a partir do estado vazio.
+  const manageSheet = (
+    <Sheet open={manageOpen} onOpenChange={setManageOpen}>
+      <SheetContent side="right" className="w-full max-w-2xl p-0 sm:max-w-2xl">
+        <SheetHeader className="border-b px-6 py-4">
+          <SheetTitle>Gerenciar rotas</SheetTitle>
+        </SheetHeader>
+        <div className="h-[calc(100dvh-73px)] overflow-y-auto p-6">
+          <RoutesView />
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
 
   // Enquanto a primeira sincronização roda, ainda pode aparecer rota — não
   // mostrar "nenhuma rota criada" antes dela responder.
@@ -121,11 +175,16 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
 
   if (!hasAnyRoute) {
     return (
-      <EmptyState
-        onManage={() => setManageOpen(true)}
-        onSync={() => syncCalendar.mutate()}
-        syncing={syncCalendar.isPending}
-      />
+      <>
+        <EmptyState
+          onGenerate={() => autoRoute.mutate()}
+          generating={autoRoute.isPending}
+          onManage={() => setManageOpen(true)}
+          onSync={() => syncCalendar.mutate()}
+          syncing={syncCalendar.isPending}
+        />
+        {manageSheet}
+      </>
     );
   }
 
@@ -133,147 +192,207 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
     syncCalendar.error instanceof ApiError &&
     !!syncCalendar.error.reason &&
     syncCalendar.error.reason !== "unauthenticated";
-  const syncTitle = syncNeedsGoogle
-    ? "Conecte o Google Agenda para gerar rotas dos eventos"
-    : syncCalendar.isError
-      ? "Falha ao atualizar pela agenda — clique para tentar de novo"
-      : "Atualizar rotas com os eventos da agenda";
+  const syncFailed = syncCalendar.isError && !syncNeedsGoogle;
+  const actionsBusy = autoRoute.isPending || syncCalendar.isPending;
+  const actionsFailed = autoRoute.isError || syncFailed;
+
+  // Resultado da última ação, numa linha abaixo da barra (antes ficava só no tooltip).
+  type Notice = {
+    tone: "ok" | "error";
+    text: string;
+    dismiss: () => void;
+    action?: { label: string; run: () => void };
+  };
+  const notice: Notice | null = autoRoute.isError
+    ? {
+        tone: "error",
+        text: `Não deu para gerar a rota: ${autoRoute.error.message}`,
+        dismiss: () => autoRoute.reset(),
+        action: { label: "Tentar de novo", run: () => autoRoute.mutate() },
+      }
+    : syncFailed
+      ? {
+          tone: "error",
+          text: "Não deu para atualizar as rotas pela agenda. Confira a conexão e tente de novo.",
+          dismiss: () => syncCalendar.reset(),
+          action: { label: "Tentar de novo", run: () => syncCalendar.mutate() },
+        }
+      : markVisited.isError
+        ? {
+            tone: "error",
+            text: "A visita não foi salva. A parada voltou ao estado anterior.",
+            dismiss: () => markVisited.reset(),
+          }
+        : reorder.isError
+          ? {
+              tone: "error",
+              text: "A nova ordem não foi salva. As paradas voltaram para a ordem anterior.",
+              dismiss: () => reorder.reset(),
+            }
+          : undoVisit && undoVisit.routeId === route?.id
+            ? {
+                tone: "ok",
+                text: undoVisit.visited
+                  ? `${undoVisit.name} marcada como visitada às ${visitedTimeLabel(undoVisit.at)}.`
+                  : `${undoVisit.name} desmarcada.`,
+                dismiss: () => setUndoVisit(null),
+                action: {
+                  label: "Desfazer",
+                  run: () => {
+                    handleToggle(undoVisit.stopId, !undoVisit.visited, { remember: false });
+                    setUndoVisit(null);
+                  },
+                },
+              }
+            : undoReorder && undoReorder.routeId === route?.id
+              ? {
+                  tone: "ok",
+                  text: "Ordem das paradas alterada.",
+                  dismiss: () => setUndoReorder(null),
+                  action: {
+                    label: "Desfazer",
+                    run: () => {
+                      reorder.mutate(undoReorder);
+                      setUndoReorder(null);
+                    },
+                  },
+                }
+              : autoRoute.isSuccess
+                ? { tone: "ok", text: autoRoute.data.summary, dismiss: () => autoRoute.reset() }
+                : null;
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-b bg-background/95 px-3 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <DayNavigator
-          effectiveDay={effectiveDay}
-          today={today}
-          canPrev={canPrev}
-          canNext={canNext}
-          hasUndated={hasUndated}
-          onPrev={goPrev}
-          onNext={goNext}
-          onGoTo={goToDay}
-        />
-
-        <RoutePicker
-          routes={routes}
-          activeId={route?.id ?? null}
-          today={today}
-          onPick={(day, id) => {
-            setSelectedDay(day);
-            setSelectedRouteId(id);
-          }}
-        />
-
-        {route ? (
-          <RouteTitle
-            route={route}
-            routesOfDay={routesOfDay}
-            onSelectRoute={setSelectedRouteId}
-            onStatusChange={handleStatusChange}
+      <header className="shrink-0 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-3 py-2.5 sm:px-4">
+          <DayNavigator
+            effectiveDay={effectiveDay}
+            today={today}
+            canPrev={canPrev}
+            canNext={canNext}
+            hasUndated={hasUndated}
+            onPrev={goPrev}
+            onNext={goNext}
+            onGoTo={goToDay}
           />
-        ) : (
-          <span className="flex-1 text-sm text-muted-foreground">Nenhuma rota neste dia</span>
-        )}
 
-        {route && totalCount > 0 && (
-          <div className="hidden shrink-0 items-center gap-2 sm:flex">
-            <ProgressBar progress={progress} className="h-1.5 w-20" />
-            <span className="text-xs tabular-nums text-muted-foreground">
-              {visitedCount}/{totalCount}
-            </span>
+          {/* No celular a rota desce para a própria linha; no desktop ocupa o meio. */}
+          <div className="order-last flex min-w-0 basis-full items-center sm:order-none sm:flex-1 sm:basis-0">
+            {route ? (
+              <RouteTitle
+                route={route}
+                routesOfDay={routesOfDay}
+                onSelectRoute={setSelectedRouteId}
+                onStatusChange={handleStatusChange}
+              />
+            ) : (
+              <span className="text-sm text-muted-foreground">Nenhuma rota neste dia</span>
+            )}
           </div>
-        )}
 
-        {route && (
-          <div className="flex shrink-0 rounded-md border p-0.5 sm:hidden">
-            <button
-              type="button"
-              onClick={() => setMobileTab("stops")}
-              className={cn(
-                "flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors",
-                mobileTab === "stops"
-                  ? "bg-background shadow-sm font-medium"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              <ListIcon className="size-3" /> Paradas
-            </button>
-            <button
-              type="button"
-              onClick={() => setMobileTab("map")}
-              className={cn(
-                "flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors",
-                mobileTab === "map"
-                  ? "bg-background shadow-sm font-medium"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              <MapIcon className="size-3" /> Mapa
-            </button>
+          <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:ml-0 sm:gap-2">
+            {syncNeedsGoogle && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => signIn.social({ provider: "google", callbackURL: "/rotas" })}
+              >
+                <CalendarSyncIcon />
+                Conectar agenda
+              </Button>
+            )}
+
+            <RoutePicker
+              routes={routes}
+              activeId={route?.id ?? null}
+              today={today}
+              onPick={(day, id) => {
+                setSelectedDay(day);
+                setSelectedRouteId(id);
+              }}
+            />
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="relative max-sm:size-10 max-sm:px-0"
+                  aria-busy={actionsBusy}
+                  title={actionsFailed ? "A última ação falhou" : undefined}
+                >
+                  {actionsBusy ? <Loader2Icon className="animate-spin" /> : <EllipsisIcon />}
+                  <span className="max-sm:sr-only">Ações</span>
+                  {actionsFailed && (
+                    <span className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-destructive ring-2 ring-background">
+                      <span className="sr-only">(a última ação falhou)</span>
+                    </span>
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-80">
+                <DropdownMenuItem
+                  className="items-start py-2"
+                  disabled={autoRoute.isPending}
+                  onClick={() => autoRoute.mutate()}
+                >
+                  {autoRoute.isPending ? (
+                    <Loader2Icon className="mt-0.5 animate-spin" />
+                  ) : (
+                    <SparklesIcon className="mt-0.5" />
+                  )}
+                  <span className="flex flex-col">
+                    <span className="font-medium">Gerar rota agora</span>
+                    <span className="text-xs text-muted-foreground">Empresas agendadas + agenda, na melhor ordem</span>
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="items-start py-2"
+                  disabled={syncCalendar.isPending}
+                  onClick={() => syncCalendar.mutate()}
+                >
+                  {syncCalendar.isPending ? (
+                    <Loader2Icon className="mt-0.5 animate-spin" />
+                  ) : (
+                    <CalendarSyncIcon className="mt-0.5" />
+                  )}
+                  <span className="flex flex-col">
+                    <span className="font-medium">Atualizar pela agenda</span>
+                    <span className="text-xs text-muted-foreground">Cria e ajusta rotas a partir dos eventos</span>
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setManageOpen(true)}>
+                  <Settings2Icon />
+                  Gerenciar rotas
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
-        )}
+        </div>
 
-        <Button
-          variant="ghost"
-          size="icon"
-          className="ml-auto shrink-0 size-8 sm:ml-0"
-          onClick={() => autoRoute.mutate()}
-          disabled={autoRoute.isPending}
-          aria-label="Gerar rotas automáticas agora"
-          title={
-            autoRoute.isSuccess
-              ? autoRoute.data.summary
-              : autoRoute.isError
-                ? autoRoute.error.message
-                : "Gerar rotas automáticas agora (Runrunit + agenda, na melhor ordem)"
-          }
-        >
-          {autoRoute.isPending ? (
-            <Loader2Icon className="size-4 animate-spin" />
-          ) : (
-            <SparklesIcon className={cn("size-4", autoRoute.isError && "text-destructive")} />
-          )}
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="shrink-0 size-8"
-          onClick={() => syncCalendar.mutate()}
-          disabled={syncCalendar.isPending}
-          title={syncTitle}
-        >
-          {syncCalendar.isPending ? (
-            <Loader2Icon className="size-4 animate-spin" />
-          ) : (
-            <CalendarSyncIcon className={cn("size-4", syncCalendar.isError && "text-destructive")} />
-          )}
-        </Button>
-        {syncNeedsGoogle && (
-          <Button
-            variant="link"
-            size="sm"
-            className="h-auto shrink-0 p-0 text-xs"
-            onClick={() => signIn.social({ provider: "google", callbackURL: "/rotas" })}
+        {notice && (
+          <div
+            role={notice.tone === "error" ? "alert" : "status"}
+            className={cn(
+              "flex items-center gap-3 border-t px-3 py-1.5 text-sm sm:px-4",
+              notice.tone === "error" ? "text-destructive" : "text-muted-foreground",
+            )}
           >
-            Conectar agenda
-          </Button>
-        )}
-
-        <Sheet open={manageOpen} onOpenChange={setManageOpen}>
-          <SheetTrigger asChild>
-            <Button variant="ghost" size="icon" className="shrink-0 size-8" title="Gerenciar rotas">
-              <Settings2Icon className="size-4" />
+            <span className="min-w-0 flex-1">{notice.text}</span>
+            {notice.action && (
+              <Button variant="outline" size="sm" onClick={notice.action.run}>
+                {notice.action.label}
+              </Button>
+            )}
+            <Button variant="ghost" size="icon" onClick={notice.dismiss} aria-label="Fechar aviso">
+              <XIcon />
             </Button>
-          </SheetTrigger>
-          <SheetContent side="right" className="w-full max-w-2xl p-0 sm:max-w-2xl">
-            <SheetHeader className="border-b px-6 py-4">
-              <SheetTitle>Gerenciar rotas</SheetTitle>
-            </SheetHeader>
-            <div className="overflow-y-auto h-[calc(100vh-73px)] p-6">
-              <RoutesView />
-            </div>
-          </SheetContent>
-        </Sheet>
-      </div>
+          </div>
+        )}
+      </header>
+
+      {manageSheet}
 
       {!route ? (
         <div className="flex-1 min-h-0">
@@ -284,22 +403,57 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
             onPrev={goPrev}
             onNext={goNext}
             onManage={() => setManageOpen(true)}
+            onGenerate={effectiveDay === today ? () => autoRoute.mutate() : undefined}
+            generating={autoRoute.isPending}
           />
         </div>
       ) : (
         <div className="flex flex-1 min-h-0">
           <StopsPanel
             route={route}
+            mode={mode}
             visibleOnMobile={mobileTab === "stops"}
             loadingStopId={loadingStopId}
             onToggle={handleToggle}
             onMove={moveStop}
+            onReorder={reorderStops}
+            onManage={() => setManageOpen(true)}
+            onStatusChange={handleStatusChange}
           />
 
           <div className={cn("flex-1 min-w-0", mobileTab === "map" ? "flex" : "hidden sm:block")}>
             <RouteMap stops={route.stops} dark={resolvedTheme === "dark"} userImage={userImage} />
           </div>
         </div>
+      )}
+
+      {route && (
+        <nav className="shrink-0 border-t bg-background px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:hidden">
+          <div role="tablist" aria-label="Visualização" className="grid grid-cols-2 rounded-full border p-1">
+            {(
+              [
+                { id: "stops", label: "Paradas", Icon: ListIcon },
+                { id: "map", label: "Mapa", Icon: MapIcon },
+              ] as const
+            ).map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={mobileTab === id}
+                onClick={() => setMobileTab(id)}
+                className={cn(
+                  "flex h-10 items-center justify-center gap-1.5 rounded-full text-sm transition-colors",
+                  mobileTab === id
+                    ? "bg-primary font-medium text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Icon className="size-4" /> {label}
+              </button>
+            ))}
+          </div>
+        </nav>
       )}
     </div>
   );

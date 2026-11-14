@@ -55,7 +55,7 @@ export function GenerateRouteDialog({ open, onClose }: { open: boolean; onClose:
           </div>
 
           {existing > 0 && (
-            <p className="text-xs text-amber-600 dark:text-amber-400">
+            <p className="text-xs text-amber-700 dark:text-amber-400">
               Já existe {existing} rota{existing > 1 ? "s" : ""} nesta data — uma nova será criada.
             </p>
           )}
@@ -76,7 +76,7 @@ export function GenerateRouteDialog({ open, onClose }: { open: boolean; onClose:
                       {c.address ? (
                         <p className="truncate text-xs text-muted-foreground">{c.address}</p>
                       ) : (
-                        <p className="text-xs text-amber-600 dark:text-amber-400">sem endereço</p>
+                        <p className="text-xs text-amber-700 dark:text-amber-400">sem endereço</p>
                       )}
                     </div>
                   </div>

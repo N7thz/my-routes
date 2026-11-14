@@ -1,46 +1,41 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import {
-  CalendarDaysIcon,
-  CalendarSyncIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  Loader2Icon,
-  RouteIcon,
-} from "lucide-react";
+import { CalendarSyncIcon, ChevronLeftIcon, ChevronRightIcon, Loader2Icon, SparklesIcon } from "lucide-react";
 
+/** Nenhuma rota em lugar nenhum: o caminho automático vem primeiro. */
 export function EmptyState({
+  onGenerate,
+  generating,
   onManage,
   onSync,
   syncing,
 }: {
+  onGenerate: () => void;
+  generating: boolean;
   onManage: () => void;
   onSync: () => void;
   syncing: boolean;
 }) {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
-      <div className="flex size-16 items-center justify-center rounded-2xl bg-muted">
-        <RouteIcon className="size-8 text-muted-foreground/60" />
-      </div>
-      <div>
-        <p className="font-semibold">Nenhuma rota criada</p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Gere as rotas a partir dos eventos da sua agenda ou crie a primeira manualmente.
+    <div className="flex h-full flex-col items-center justify-center gap-5 p-8 text-center">
+      <div className="max-w-sm">
+        <h1 className="text-2xl font-bold tracking-tight">Nenhuma rota ainda</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Gere a rota de hoje com as empresas agendadas e os eventos da agenda, já na melhor ordem.
         </p>
       </div>
-      <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
-        <Button onClick={onSync} disabled={syncing}>
-          {syncing ? (
-            <Loader2Icon className="mr-1 size-4 animate-spin" />
-          ) : (
-            <CalendarSyncIcon className="mr-1 size-4" />
-          )}
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        <Button onClick={onGenerate} disabled={generating}>
+          {generating ? <Loader2Icon className="animate-spin" /> : <SparklesIcon />}
+          Gerar rota de hoje
+        </Button>
+        <Button variant="outline" onClick={onSync} disabled={syncing}>
+          {syncing ? <Loader2Icon className="animate-spin" /> : <CalendarSyncIcon />}
           Buscar na agenda
         </Button>
-        <Button variant="outline" onClick={onManage}>
-          Criar rota manualmente
+        <Button variant="ghost" onClick={onManage}>
+          Criar manualmente
         </Button>
       </div>
     </div>
@@ -54,6 +49,8 @@ export function EmptyDay({
   onPrev,
   onNext,
   onManage,
+  onGenerate,
+  generating = false,
 }: {
   dayLabel: string;
   canPrev: boolean;
@@ -61,28 +58,42 @@ export function EmptyDay({
   onPrev: () => void;
   onNext: () => void;
   onManage: () => void;
+  /** Só no dia de hoje: gera a rota automática. */
+  onGenerate?: () => void;
+  generating?: boolean;
 }) {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
-      <div className="flex size-16 items-center justify-center rounded-2xl bg-muted">
-        <CalendarDaysIcon className="size-8 text-muted-foreground/60" />
+    <div className="flex h-full flex-col items-center justify-center gap-5 p-8 text-center">
+      <div className="max-w-sm">
+        <h2 className="text-xl font-bold tracking-tight">
+          Nenhuma rota {dayLabel === "Sem data" ? "sem data" : `em ${dayLabel.toLowerCase()}`}
+        </h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {onGenerate
+            ? "Gere a rota de hoje com as empresas agendadas e a agenda, ou monte uma à mão."
+            : "Veja a rota de outro dia ou monte uma para esta data."}
+        </p>
       </div>
-      <div>
-        <p className="font-semibold">Nenhuma rota em {dayLabel.toLowerCase()}</p>
-        <p className="mt-1 text-sm text-muted-foreground">Veja uma rota de outro dia ou crie uma para esta data.</p>
-      </div>
-      <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        {onGenerate && (
+          <Button onClick={onGenerate} disabled={generating}>
+            {generating ? <Loader2Icon className="animate-spin" /> : <SparklesIcon />}
+            Gerar rota de hoje
+          </Button>
+        )}
         {canPrev && (
           <Button variant="outline" onClick={onPrev}>
-            <ChevronLeftIcon className="mr-1 size-4" /> Ver rota anterior
+            <ChevronLeftIcon /> Rota anterior
           </Button>
         )}
         {canNext && (
           <Button variant="outline" onClick={onNext}>
-            Ver próxima rota <ChevronRightIcon className="ml-1 size-4" />
+            Próxima rota <ChevronRightIcon />
           </Button>
         )}
-        <Button onClick={onManage}>Gerenciar rotas</Button>
+        <Button variant={onGenerate ? "ghost" : "default"} onClick={onManage}>
+          Gerenciar rotas
+        </Button>
       </div>
     </div>
   );

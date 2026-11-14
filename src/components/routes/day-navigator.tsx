@@ -25,46 +25,41 @@ export function DayNavigator({
   onGoTo: (day: string) => void;
 }) {
   return (
-    <div className="flex shrink-0 items-center gap-1">
+    <nav aria-label="Dia" className="flex shrink-0 items-center gap-1">
       <Button
         variant="ghost"
         size="icon"
-        className="size-8"
         onClick={onPrev}
         disabled={!canPrev}
+        aria-label="Dia anterior com rota"
         title="Dia anterior com rota"
       >
-        <ChevronLeftIcon className="size-4" />
+        <ChevronLeftIcon />
       </Button>
-      <div className="min-w-[7.5rem] px-1 text-center leading-tight">
+      <div className="min-w-[7.5rem] px-1 text-center leading-tight" aria-live="polite">
         <div className="text-sm font-semibold">{relativeDayLabel(effectiveDay)}</div>
-        <div className="text-[11px] text-muted-foreground">{fullDayLabel(effectiveDay)}</div>
+        <div className="text-xs text-muted-foreground">{fullDayLabel(effectiveDay)}</div>
       </div>
       <Button
         variant="ghost"
         size="icon"
-        className="size-8"
         onClick={onNext}
         disabled={!canNext}
+        aria-label="Próximo dia com rota"
         title="Próximo dia com rota"
       >
-        <ChevronRightIcon className="size-4" />
+        <ChevronRightIcon />
       </Button>
       {effectiveDay !== today && (
-        <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => onGoTo(today)}>
+        <Button variant="outline" size="sm" className="ml-1" onClick={() => onGoTo(today)}>
           Hoje
         </Button>
       )}
       {hasUndated && (
-        <Button
-          variant={effectiveDay === UNDATED ? "secondary" : "ghost"}
-          size="sm"
-          className="h-8 text-xs"
-          onClick={() => onGoTo(UNDATED)}
-        >
+        <Button variant={effectiveDay === UNDATED ? "secondary" : "ghost"} size="sm" onClick={() => onGoTo(UNDATED)}>
           Sem data
         </Button>
       )}
-    </div>
+    </nav>
   );
 }

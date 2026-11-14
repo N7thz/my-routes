@@ -63,7 +63,7 @@ export function AddStopDialog({ routeId, open, onClose }: { routeId: string; ope
           <div className="flex flex-col gap-1.5">
             <Label>Empresa (opcional)</Label>
             <Select value={companyId} onValueChange={handleCompanyChange}>
-              <SelectTrigger>
+              <SelectTrigger aria-label="Empresa (opcional)">
                 <SelectValue placeholder="Selecionar empresa…" />
               </SelectTrigger>
               <SelectContent>

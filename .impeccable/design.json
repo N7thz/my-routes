@@ -1,0 +1,154 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-13T22:20:00-03:00",
+  "title": "Design System: My Routes",
+  "extensions": {
+    "colorMeta": {
+      "night": { "role": "neutral", "displayName": "Noite", "canonical": "#000000", "tonalRamp": ["oklch(0 0 0)", "oklch(0.12 0 0)", "oklch(0.145 0 0)", "oklch(0.17 0 0)", "oklch(0.2 0 0)", "oklch(0.22 0 0)", "oklch(0.24 0 0)", "oklch(0.3 0 0)"] },
+      "night-card": { "role": "neutral", "displayName": "Noite Cartão", "canonical": "oklch(0.145 0 0)" },
+      "night-popover": { "role": "neutral", "displayName": "Noite Popover", "canonical": "oklch(0.17 0 0)" },
+      "night-muted": { "role": "neutral", "displayName": "Noite Fosca", "canonical": "oklch(0.2 0 0)" },
+      "night-secondary": { "role": "neutral", "displayName": "Noite Secundária", "canonical": "oklch(0.22 0 0)" },
+      "night-accent": { "role": "neutral", "displayName": "Noite Destaque", "canonical": "oklch(0.24 0 0)" },
+      "night-sidebar": { "role": "neutral", "displayName": "Noite Lateral", "canonical": "oklch(0.12 0 0)" },
+      "chalk": { "role": "neutral", "displayName": "Giz", "canonical": "#ffffff", "tonalRamp": ["rgb(255 255 255 / 0.045)", "rgb(255 255 255 / 0.1)", "rgb(255 255 255 / 0.2)", "rgb(255 255 255 / 0.45)", "rgb(255 255 255 / 0.6)", "rgb(255 255 255 / 0.7)", "rgb(255 255 255 / 0.9)", "rgb(255 255 255 / 1)"] },
+      "chalk-soft": { "role": "neutral", "displayName": "Giz Suave", "canonical": "rgb(255 255 255 / 0.7)" },
+      "chalk-muted": { "role": "neutral", "displayName": "Giz Fosco", "canonical": "rgb(255 255 255 / 0.6)" },
+      "chalk-input": { "role": "neutral", "displayName": "Giz Campo", "canonical": "rgb(255 255 255 / 0.45)" },
+      "chalk-line": { "role": "neutral", "displayName": "Linha de Giz", "canonical": "rgb(255 255 255 / 0.1)" },
+      "paper": { "role": "neutral", "displayName": "Papel", "canonical": "#ffffff", "tonalRamp": ["oklch(0.85 0 0)", "oklch(0.9 0 0)", "oklch(0.93 0 0)", "oklch(0.94 0 0)", "oklch(0.955 0 0)", "oklch(0.965 0 0)", "oklch(0.975 0 0)", "oklch(1 0 0)"] },
+      "paper-muted": { "role": "neutral", "displayName": "Papel Fosco", "canonical": "oklch(0.965 0 0)" },
+      "paper-secondary": { "role": "neutral", "displayName": "Papel Secundário", "canonical": "oklch(0.955 0 0)" },
+      "paper-accent": { "role": "neutral", "displayName": "Papel Destaque", "canonical": "oklch(0.94 0 0)" },
+      "paper-sidebar": { "role": "neutral", "displayName": "Papel Lateral", "canonical": "oklch(0.975 0 0)" },
+      "ink": { "role": "neutral", "displayName": "Tinta", "canonical": "#000000" },
+      "ink-muted": { "role": "neutral", "displayName": "Tinta Fosca", "canonical": "rgb(0 0 0 / 0.6)" },
+      "ink-line": { "role": "neutral", "displayName": "Linha de Tinta", "canonical": "rgb(0 0 0 / 0.1)" },
+      "signal-red-dark": { "role": "tertiary", "displayName": "Sinal Vermelho (escuro)", "canonical": "oklch(0.65 0.22 15)" },
+      "signal-red-light": { "role": "tertiary", "displayName": "Sinal Vermelho (claro)", "canonical": "oklch(0.577 0.245 27.325)" },
+      "signal-green": { "role": "tertiary", "displayName": "Sinal Verde", "canonical": "#10b981", "tonalRamp": ["#064e3b", "#065f46", "#047857", "#059669", "#10b981", "#34d399", "#6ee7b7", "#d1fae5"] },
+      "signal-amber": { "role": "tertiary", "displayName": "Sinal Âmbar", "canonical": "#f59e0b", "tonalRamp": ["#78350f", "#92400e", "#b45309", "#d97706", "#f59e0b", "#fbbf24", "#fcd34d", "#fef3c7"] }
+    },
+    "typographyMeta": {
+      "headline": { "displayName": "Headline", "purpose": "Título de página." },
+      "title": { "displayName": "Title", "purpose": "Título de cartão, dialog e sheet." },
+      "metric": { "displayName": "Metric", "purpose": "Contadores e totais, números tabulares." },
+      "body": { "displayName": "Body", "purpose": "Texto corrido, listas e células." },
+      "label": { "displayName": "Label", "purpose": "Cabeçalhos de coluna e rótulos de seção, caixa alta." },
+      "mono": { "displayName": "Mono", "purpose": "CNPJ, coordenadas e IDs." }
+    },
+    "shadows": [
+      { "name": "light-edge", "value": "inset 0 1px 0 0 rgb(255 255 255 / 0.1)", "purpose": "Cartões no tema escuro: luz na borda superior." },
+      { "name": "ambient-light", "value": "0 2px 12px rgb(0 0 0 / 0.06)", "purpose": "Cartões no tema claro." },
+      { "name": "hover-raise", "value": "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)", "purpose": "Botão primário e destrutivo no hover; popovers e selects." },
+      { "name": "floating", "value": "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)", "purpose": "Dialogs e sheets." },
+      { "name": "atmosphere", "value": "radial-gradient(60vmax circle at 0% 0%, var(--atmo-glow), transparent 62%), radial-gradient(50vmax circle at 100% 100%, var(--atmo-glow), transparent 62%), grade de 40px a var(--atmo-line)", "purpose": "Fundo fixo atrás do app (body::before)." }
+    ],
+    "motion": [
+      { "name": "control", "value": "200ms ease-out", "purpose": "Botões: cor, sombra, escala 1.03 no hover e 1px para baixo ao pressionar." },
+      { "name": "popover-enter", "value": "150ms, scale 0.95 → 1 + opacity", "purpose": "Selects, menus e popovers, a partir da origem do gatilho." },
+      { "name": "dialog-enter", "value": "200ms, scale 0.95 → 1 + opacity", "purpose": "Dialogs e overlay." },
+      { "name": "user-pulse", "value": "userPulse: scale 1 → 2.6, opacity 0.7 → 0", "purpose": "Posição do usuário no mapa." },
+      { "name": "hero-enter", "value": "540ms ease-out, +120ms por item", "purpose": "Só no login." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Ação principal: pílula preenchida com a cor do texto.",
+      "html": "<button class=\"ds-btn-primary\">Gerar rota</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 8px 20px; border: none; border-radius: 9999px; background: var(--primary, #ffffff); color: var(--primary-foreground, #000000); font-family: var(--font-general-sans, 'General Sans'), system-ui, sans-serif; font-size: 0.875rem; font-weight: 600; cursor: pointer; transition: transform 200ms ease-out, box-shadow 200ms ease-out, background-color 200ms ease-out; } .ds-btn-primary:hover { background: color-mix(in oklch, var(--primary, #ffffff) 90%, transparent); box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); transform: scale(1.03); } .ds-btn-primary:active { transform: translateY(1px); } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--background, #000000), 0 0 0 4px var(--ring, #ffffff); }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Ação secundária: pílula com borda de 1,5px na cor de campo.",
+      "html": "<button class=\"ds-btn-outline\">Cancelar</button>",
+      "css": ".ds-btn-outline { display: inline-flex; align-items: center; height: 40px; padding: 8px 20px; border: 1.5px solid var(--input, rgb(255 255 255 / 0.45)); border-radius: 9999px; background: var(--background, #000000); color: var(--foreground, #ffffff); font-family: var(--font-general-sans, 'General Sans'), system-ui, sans-serif; font-size: 0.875rem; font-weight: 600; cursor: pointer; transition: background-color 200ms ease-out, color 200ms ease-out; } .ds-btn-outline:hover { background: var(--accent, oklch(0.24 0 0)); color: var(--accent-foreground, #ffffff); } .ds-btn-outline:active { transform: translateY(1px); } .ds-btn-outline:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--background, #000000), 0 0 0 4px var(--ring, #ffffff); }"
+    },
+    {
+      "name": "Destructive Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Excluir e ações irreversíveis.",
+      "html": "<button class=\"ds-btn-destructive\">Excluir empresa</button>",
+      "css": ".ds-btn-destructive { display: inline-flex; align-items: center; height: 40px; padding: 8px 20px; border: none; border-radius: 9999px; background: var(--destructive, oklch(0.65 0.22 15)); color: var(--destructive-foreground, #000000); font-family: var(--font-general-sans, 'General Sans'), system-ui, sans-serif; font-size: 0.875rem; font-weight: 600; cursor: pointer; transition: transform 200ms ease-out, box-shadow 200ms ease-out; } .ds-btn-destructive:hover { box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); transform: scale(1.03); } .ds-btn-destructive:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--background, #000000), 0 0 0 4px var(--ring, #ffffff); }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Campo em pílula com anel de foco afastado.",
+      "html": "<input class=\"ds-input\" placeholder=\"Buscar empresa ou CNPJ\" />",
+      "css": ".ds-input { height: 40px; width: 280px; padding: 8px 16px; border: 1px solid var(--input, rgb(255 255 255 / 0.45)); border-radius: 9999px; background: var(--background, #000000); color: var(--foreground, #ffffff); font-family: var(--font-general-sans, 'General Sans'), system-ui, sans-serif; font-size: 0.875rem; } .ds-input::placeholder { color: var(--muted-foreground, rgb(255 255 255 / 0.6)); } .ds-input:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--background, #000000), 0 0 0 4px var(--ring, #ffffff); }"
+    },
+    {
+      "name": "Status Badges",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "Badges em pílula; cor de sinal só para estado.",
+      "html": "<div class=\"ds-badges\"><span class=\"ds-badge ds-badge-secondary\">Agendada</span><span class=\"ds-badge ds-badge-ok\">Visitada</span><span class=\"ds-badge ds-badge-warn\">Endereço não encontrado</span><span class=\"ds-badge ds-badge-outline\">Teresópolis</span></div>",
+      "css": ".ds-badges { display: flex; gap: 8px; flex-wrap: wrap; } .ds-badge { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 9999px; border: 1px solid transparent; font-family: var(--font-general-sans, 'General Sans'), system-ui, sans-serif; font-size: 0.75rem; font-weight: 600; } .ds-badge-secondary { background: var(--secondary, oklch(0.22 0 0)); color: var(--secondary-foreground, #ffffff); border-color: var(--border, rgb(255 255 255 / 0.1)); } .ds-badge-ok { background: color-mix(in oklch, #10b981 15%, transparent); color: #34d399; } .ds-badge-warn { background: color-mix(in oklch, #f59e0b 15%, transparent); color: #fbbf24; } .ds-badge-outline { border-color: var(--input, rgb(255 255 255 / 0.45)); color: var(--foreground, #ffffff); }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Contêiner de 20px de canto com fio de luz no topo.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-title\">Rota de hoje</div><div class=\"ds-card-metric\">7 paradas</div><div class=\"ds-card-muted\">42 km · saída 08:30</div></div>",
+      "css": ".ds-card { width: 280px; padding: 24px; border-radius: 20px; border: 1px solid var(--border, rgb(255 255 255 / 0.1)); background: var(--card, oklch(0.145 0 0)); color: var(--card-foreground, #ffffff); box-shadow: inset 0 1px 0 0 rgb(255 255 255 / 0.1); font-family: var(--font-general-sans, 'General Sans'), system-ui, sans-serif; } .ds-card-title { font-size: 1.125rem; font-weight: 600; line-height: 1.25; } .ds-card-metric { margin-top: 12px; font-size: 1.25rem; font-weight: 700; font-variant-numeric: tabular-nums; } .ds-card-muted { margin-top: 4px; font-size: 0.875rem; color: var(--muted-foreground, rgb(255 255 255 / 0.6)); font-variant-numeric: tabular-nums; }"
+    },
+    {
+      "name": "Sidebar Nav",
+      "kind": "nav",
+      "refersTo": "sidebar",
+      "description": "Itens em pílula; ativo com fundo de destaque e contorno interno.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-item\" href=\"#\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"4\" y=\"2\" width=\"16\" height=\"20\" rx=\"2\"/><path d=\"M9 22v-4h6v4M8 6h.01M16 6h.01M12 6h.01M12 10h.01M12 14h.01M16 10h.01M16 14h.01M8 10h.01M8 14h.01\"/></svg><span>Empresas</span></a><a class=\"ds-nav-item\" href=\"#\" data-active=\"true\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"6\" cy=\"19\" r=\"3\"/><path d=\"M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15\"/><circle cx=\"18\" cy=\"5\" r=\"3\"/></svg><span>Rotas</span></a><a class=\"ds-nav-item\" href=\"#\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3\" y=\"4\" width=\"18\" height=\"18\" rx=\"2\"/><path d=\"M16 2v4M8 2v4M3 10h18\"/></svg><span>Agenda</span></a></nav>",
+      "css": ".ds-nav { display: flex; flex-direction: column; gap: 4px; width: 220px; padding: 8px; border-radius: 20px; background: var(--sidebar, oklch(0.12 0 0)); font-family: var(--font-general-sans, 'General Sans'), system-ui, sans-serif; } .ds-nav-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 9999px; color: var(--sidebar-foreground, rgb(255 255 255 / 0.7)); font-size: 0.875rem; text-decoration: none; } .ds-nav-item:hover { background: var(--sidebar-accent, oklch(0.22 0 0)); color: var(--sidebar-accent-foreground, #ffffff); } .ds-nav-item[data-active=true] { background: var(--sidebar-accent, oklch(0.22 0 0)); color: var(--sidebar-accent-foreground, #ffffff); font-weight: 500; box-shadow: inset 0 0 0 1px var(--sidebar-border, rgb(255 255 255 / 0.1)); } .ds-nav-item:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--sidebar-ring, #ffffff); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Painel noturno",
+    "overview": "My Routes é um painel de trabalho que mora no escuro: fundo preto puro, superfícies em degraus de cinza neutro e texto branco com opacidade controlada. A origem é a estética Web3 premium (General Sans, pílulas, luz difusa atrás de tudo), mas aplicada a uma ferramenta de operação: densidade de painel, listas, tabelas, calendário e mapa. O luxo está na sobriedade e no acabamento, não em decoração.\n\nNão existe cor de marca. A hierarquia vem só de contraste (branco sobre preto, opacidades 100/70/60/45/10) e de forma (tudo que se clica é pílula). Cor saturada é reservada para sinalização de estado. Atrás do app há uma atmosfera fixa: duas manchas de luz nos cantos e uma grade fina de 40px, quase invisíveis, que dão profundidade de \"painel à noite\" sem competir com o conteúdo.\n\nO tema claro existe e é completo (inversão exata: papel branco, tinta preta), mas o tema escuro é a referência. Toda tela nova é desenhada primeiro no escuro.",
+    "keyCharacteristics": [
+      "Monocromático absoluto; cor só para estado.",
+      "Controles em pílula (botões, campos, selects, badges, botões do calendário).",
+      "Superfícies em degraus de cinza neutro (croma 0), sem matiz.",
+      "Atmosfera fixa de luz e grade atrás do app.",
+      "Movimento curto e funcional no app; movimento cinematográfico só no login."
+    ],
+    "rules": [
+      { "name": "The No Brand Color Rule", "body": "Não existe cor de destaque. Botão primário é giz sobre noite (ou tinta sobre papel). Nunca introduza um azul, roxo ou gradiente colorido como \"cor da marca\".", "section": "colors" },
+      { "name": "The Signal Only Rule", "body": "Verde, âmbar e vermelho aparecem só para comunicar estado. Se tirar a cor muda apenas a aparência e não a informação, a cor não deveria estar lá.", "section": "colors" },
+      { "name": "The Zero Chroma Rule", "body": "Todo cinza tem croma 0 (oklch(L 0 0)). Nada de cinza azulado ou quente.", "section": "colors" },
+      { "name": "The One Family Rule", "body": "Só General Sans na interface. JetBrains Mono apenas para dados técnicos, nunca para títulos ou decoração.", "section": "typography" },
+      { "name": "The Tabular Numbers Rule", "body": "Todo número que se compara (contagens, distâncias, horários) usa tabular-nums.", "section": "typography" },
+      { "name": "The Light Edge Rule", "body": "No escuro, elevação é luz na borda superior, não sombra embaixo. Sombra preta sobre fundo preto não existe.", "section": "elevation" },
+      { "name": "The Pill Means Action Rule", "body": "Se é pílula, dá para clicar ou digitar. Contêineres nunca são pílula.", "section": "shapes" }
+    ],
+    "dos": [
+      "Do desenhar primeiro no tema escuro e conferir a inversão no claro.",
+      "Do usar pílula para todo controle acionável e 20px de canto para contêineres.",
+      "Do expressar hierarquia com opacidade do texto (100 / 70 / 60) antes de pensar em cor.",
+      "Do reservar verde, âmbar e vermelho para estado, com os tons de texto definidos para cada tema.",
+      "Do usar tabular-nums em números comparáveis e JetBrains Mono em CNPJ e coordenadas.",
+      "Do manter os movimentos do app entre 150 e 200ms, com ease-out, respeitando prefers-reduced-motion."
+    ],
+    "donts": [
+      "Don't criar cor de marca, gradiente colorido ou cinza com matiz.",
+      "Don't usar texto em gradiente, vídeo de fundo, entrada escalonada (hero-enter) ou pílula em camadas fora do login.",
+      "Don't colocar sombra preta sob elementos no tema escuro; use o fio de luz.",
+      "Don't fazer cartões ou painéis em formato de pílula.",
+      "Don't estilizar estado com atributos do Radix (data-[state=open]); use os do ui-sdk.",
+      "Don't reforçar a grade e as manchas de fundo: elas ficam abaixo de 10% de opacidade."
+    ]
+  }
+}

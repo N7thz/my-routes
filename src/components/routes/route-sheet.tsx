@@ -72,7 +72,11 @@ export function StopRow({
         className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground transition-colors"
         title={visited ? "Marcar como não visitada" : "Marcar como visitada"}
       >
-        {visited ? <CheckCircle2Icon className="size-4 text-emerald-600 dark:text-emerald-500" /> : <CircleIcon className="size-4" />}
+        {visited ? (
+          <CheckCircle2Icon className="size-4 text-emerald-600 dark:text-emerald-500" />
+        ) : (
+          <CircleIcon className="size-4" />
+        )}
       </button>
       <div className="flex-1 min-w-0">
         <p className={cn("text-sm font-medium leading-snug", visited && "line-through")}>

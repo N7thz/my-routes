@@ -7,7 +7,8 @@ import type { RouteRecord } from "@/lib/route-service";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CalendarDaysIcon, CheckIcon, ChevronDownIcon } from "lucide-react";
-import { DAY_STATUS_CONFIG, UNDATED } from "./day-labels";
+import { UNDATED } from "./day-labels";
+import { STATUS_CONFIG } from "./list-status-config";
 
 function groupRoutes(routes: RouteRecord[], today: string) {
   const prev: RouteRecord[] = [];
@@ -55,20 +56,20 @@ export function RoutePicker({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="h-8 shrink-0 gap-1.5 text-xs" title="Ver todas as rotas">
-          <CalendarDaysIcon className="size-3.5" />
-          Rotas
-          <ChevronDownIcon className="size-3" />
+        <Button variant="outline" size="sm" className="shrink-0 max-sm:size-10 max-sm:px-0">
+          <CalendarDaysIcon />
+          <span className="max-sm:sr-only">Todas as rotas</span>
+          <ChevronDownIcon className="opacity-60 max-sm:hidden" />
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="max-h-[70vh] w-72 overflow-y-auto p-1">
         {empty ? (
-          <p className="p-3 text-center text-xs text-muted-foreground">Nenhuma rota.</p>
+          <p className="p-4 text-center text-sm text-muted-foreground">Nenhuma rota ainda.</p>
         ) : (
           sections.map((s) =>
             s.items.length === 0 ? null : (
               <div key={s.title} className="flex flex-col">
-                <p className="px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <p className="px-3 pb-1 pt-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   {s.title}
                 </p>
                 {s.items.map((r) => (
@@ -76,19 +77,20 @@ export function RoutePicker({
                     type="button"
                     key={r.id}
                     onClick={() => pick(r)}
+                    aria-current={r.id === activeId ? "true" : undefined}
                     className={cn(
-                      "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted/60",
-                      r.id === activeId && "bg-muted",
+                      "flex min-h-11 w-full items-center gap-2.5 rounded-sm px-3 py-2 text-left outline-none transition-colors hover:bg-accent focus-visible:bg-accent",
+                      r.id === activeId && "bg-accent",
                     )}
                   >
-                    <span className={cn("size-2 shrink-0 rounded-full", DAY_STATUS_CONFIG[r.status].className)} />
+                    <span className={cn("size-2 shrink-0 rounded-full", STATUS_CONFIG[r.status].dotClassName)} />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm">{r.name}</p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {r.stops.length} parada{r.stops.length !== 1 ? "s" : ""} · {DAY_STATUS_CONFIG[r.status].label}
+                      <p className="text-xs tabular-nums text-muted-foreground">
+                        {r.stops.length} parada{r.stops.length !== 1 ? "s" : ""} · {STATUS_CONFIG[r.status].label}
                       </p>
                     </div>
-                    {r.id === activeId && <CheckIcon className="size-3.5 shrink-0 text-primary" />}
+                    {r.id === activeId && <CheckIcon className="size-4 shrink-0" />}
                   </button>
                 ))}
               </div>
