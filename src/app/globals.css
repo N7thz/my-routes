@@ -1,3 +1,9 @@
+/* O ui-sdk injeta em runtime um reset dos popups (padding, margin, borda,
+   fundo...) em `@layer ui-sdk`. Declarada só no runtime, essa layer entraria
+   depois das do Tailwind e venceria os utilitários (o p-6 do diálogo virava 0).
+   Declarando-a primeiro, ela fica com a menor prioridade. */
+@layer ui-sdk, theme, base, components, utilities;
+
 @import "tailwindcss";
 
 @custom-variant dark (&:is(.dark *));
