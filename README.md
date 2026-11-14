@@ -8,7 +8,7 @@ Feito para uso pessoal (um técnico/fiscal, quase tudo no RJ). Detalhes de produ
 
 - **Empresas**: cadastro com status, grupos, e-mails vinculados e preenchimento automático pelo CNPJ (BrasilAPI). Filtros salvos, transferência entre listas e importação/exportação com o Notion.
 - **Agenda**: leitura de uma ou mais contas do Google Calendar; os eventos casam pelo nome com qualquer empresa cadastrada. Os que não citam nenhuma aparecem em "Eventos sem empresa" (tela de rotas), onde viram cadastro com o formulário preenchido pelo evento ou são marcados como "não é visita".
-- **Rotas**: rota por dia ou por janela de datas, ordem otimizada (OSRM), mapa (MapLibre + MapTiler), navegação até a parada (Google Maps/Waze), painel de execução do dia, resumo e desfazer.
+- **Rotas**: rota por dia ou por janela de datas, ordem otimizada (OSRM), mapa (MapLibre + MapTiler), navegação até a parada (Google Maps/Waze), painel de execução do dia, resumo e desfazer. Check-in automático pelo GPS ao chegar na parada e trajeto do dia gravado no mapa.
 - **Rota automática**: um cron diário sincroniza a agenda e gera a rota do dia sozinho.
 - **Geocodificação**: Geoapify com Nominatim como reserva, respeitando limites; endereços não encontrados ficam marcados.
 - **Uso das APIs**: o consumo das APIs com cota é acompanhado no app; área de admin restrita por e-mail.

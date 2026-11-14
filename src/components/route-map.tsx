@@ -6,6 +6,8 @@ import { MapPinIcon, Loader2Icon, LocateFixedIcon, LocateIcon } from "lucide-rea
 import type { GeoJSONSource, Map as MapLibreMap, Marker } from "maplibre-gl";
 import { Button } from "@/components/ui/button";
 import { type LatLng, useRouteLine } from "@/hooks/use-route-line";
+import { metersBetween } from "@/lib/arrival";
+import { subscribePosition } from "@/lib/geo-watch";
 
 type Stop = {
   address: string;
@@ -27,6 +29,7 @@ const WORKER_URL = "/maplibre/maplibre-gl-worker.mjs";
 
 const ROUTE_SOURCE = "route-line";
 const ACCURACY_SOURCE = "user-accuracy";
+const TRAIL_SOURCE = "user-trail";
 
 /** Cores do mapa por tema: monocromático, verde só para "visitada". */
 type MapPalette = {
@@ -77,14 +80,6 @@ function located(stops: Stop[]): (Stop & LatLng & { index: number })[] {
   );
 }
 
-function metersBetween(a: LatLng, b: LatLng): number {
-  const R = 6_371_000;
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(b.lat - a.lat);
-  const dLng = toRad(b.lng - a.lng);
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(h));
-}
 
 /** Polígono do círculo de precisão do GPS (o MapLibre não tem círculo em metros). */
 function accuracyPolygon({ lat, lng }: LatLng, radius: number): GeoJSON.Feature<GeoJSON.Polygon> {
@@ -189,7 +184,18 @@ function drawAccuracy(map: MapLibreMap, pos: LatLng & { accuracy: number }, colo
   });
 }
 
-export function RouteMap({ stops, dark, userImage }: { stops: Stop[]; dark?: boolean; userImage?: string | null }) {
+export function RouteMap({
+  stops,
+  dark,
+  userImage,
+  trail,
+}: {
+  stops: Stop[];
+  dark?: boolean;
+  userImage?: string | null;
+  /** Trajeto gravado pelo GPS, em ordem de horário. */
+  trail?: LatLng[];
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const libRef = useRef<MapLibreModule | null>(null);
@@ -334,14 +340,14 @@ export function RouteMap({ stops, dark, userImage }: { stops: Stop[]; dark?: boo
 
   // GPS: atualiza o marcador direto no mapa, sem re-render do React a cada leitura.
   useEffect(() => {
-    if (!ready || typeof navigator === "undefined" || !navigator.geolocation) return;
+    if (!ready) return;
     const lib = libRef.current;
     const map = mapRef.current;
     if (!lib || !map) return;
 
-    const id = navigator.geolocation.watchPosition(
-      ({ coords }) => {
-        const pos = { lat: coords.latitude, lng: coords.longitude, accuracy: coords.accuracy };
+    return subscribePosition(
+      ({ lat, lng, accuracy }) => {
+        const pos = { lat, lng, accuracy };
         const last = lastUserPosRef.current;
         if (
           last &&
@@ -363,11 +369,42 @@ export function RouteMap({ stops, dark, userImage }: { stops: Stop[]; dark?: boo
         drawAccuracy(map, pos, paletteRef.current.accuracy);
         if (followingRef.current) map.easeTo({ center: [pos.lng, pos.lat], duration: 500 });
       },
-      () => {},
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 },
     );
-    return () => navigator.geolocation.clearWatch(id);
   }, [ready, userImage]);
+
+  // Trajeto feito (GPS gravado), tracejado e abaixo da linha da rota.
+  const trailKey = trail?.length ? `${trail.length}:${trail[0].lat},${trail[0].lng}` : "";
+  // biome-ignore lint/correctness/useExhaustiveDependencies: trailKey resume o trajeto; styleGen redesenha após trocar o tema
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready || !map.isStyleLoaded()) return;
+    const data: GeoJSON.Feature<GeoJSON.LineString> = {
+      type: "Feature",
+      properties: {},
+      geometry: { type: "LineString", coordinates: (trail ?? []).map((p) => [p.lng, p.lat]) },
+    };
+    const source = map.getSource<GeoJSONSource>(TRAIL_SOURCE);
+    if (source) {
+      source.setData(data);
+      return;
+    }
+    map.addSource(TRAIL_SOURCE, { type: "geojson", data });
+    map.addLayer(
+      {
+        id: TRAIL_SOURCE,
+        type: "line",
+        source: TRAIL_SOURCE,
+        layout: { "line-join": "round", "line-cap": "round" },
+        paint: {
+          "line-color": paletteRef.current.visited,
+          "line-width": 3,
+          "line-opacity": 0.8,
+          "line-dasharray": [1, 1.5],
+        },
+      },
+      map.getLayer(ROUTE_SOURCE) ? ROUTE_SOURCE : undefined,
+    );
+  }, [trailKey, ready, styleGen]);
 
   // Troca de tema: o círculo de precisão (camada de estilo) é redesenhado e o
   // marcador do usuário ganha as cores novas.

@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { useRoutes, useRouteDays, useMarkStopVisited, useUpdateRoute, useReorderStops } from "@/hooks/use-routes";
 import { useAutoSyncCalendarRoutes } from "@/hooks/use-sync-calendar-routes";
 import { useUnmatchedEvents } from "@/hooks/use-unmatched-events";
+import { useAutoCheckinSetting, useRouteTrack, useRouteTracking } from "@/hooks/use-route-tracking";
 import { useRunAutoRoute } from "@/hooks/use-auto-route";
 import { ApiError } from "@/lib/api-client";
 import { dayKey, defaultRoutesFrom, shiftDayKey, todayKey } from "@/lib/dates";
@@ -26,6 +27,8 @@ import {
   CalendarSyncIcon,
   EllipsisIcon,
   ListIcon,
+  LocateFixedIcon,
+  LocateOffIcon,
   Loader2Icon,
   MapIcon,
   Settings2Icon,
@@ -68,6 +71,8 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
     name: string;
     visited: boolean;
     at: Date;
+    /** Marcada pelo check-in automático (GPS), não por toque. */
+    auto?: boolean;
   } | null>(null);
   const [undoReorder, setUndoReorder] = useState<{ routeId: string; orderedIds: string[] } | null>(null);
 
@@ -115,15 +120,16 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
     else if (hasUndated) goToDay(UNDATED);
   }
 
-  function handleToggle(stopId: string, visited: boolean, { remember = true } = {}) {
+  function handleToggle(stopId: string, visited: boolean, { remember = true, auto = false } = {}) {
     if (!route) return;
     setLoadingStopId(stopId);
     markVisited.mutate({ routeId: route.id, stopId, visited }, { onSettled: () => setLoadingStopId(null) });
-    // Toque errado com o dedo na rua: o aviso abaixo da barra oferece desfazer.
+    // Toque errado com o dedo na rua (ou chegada detectada por engano): o aviso
+    // abaixo da barra oferece desfazer.
     if (remember) {
       const stop = route.stops.find((s) => s.id === stopId);
       const name = stop?.label ?? stop?.company?.name ?? "Parada";
-      setUndoVisit({ routeId: route.id, stopId, name, visited, at: new Date() });
+      setUndoVisit({ routeId: route.id, stopId, name, visited, at: new Date(), auto });
       setUndoReorder(null);
     }
     // Primeira visita do dia tira a rota do rascunho sozinha (automático antes de manual).
@@ -131,6 +137,17 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
       updateRoute.mutate({ id: route.id, data: { status: "EM_ANDAMENTO" } });
     }
   }
+
+  // GPS na rota de hoje: grava o trajeto e marca a parada como visitada ao
+  // ficar um minuto nela. Liga/desliga por aparelho, no menu de ações.
+  const [autoCheckin, setAutoCheckin] = useAutoCheckinSetting();
+  const tracking = autoCheckin && !!route && effectiveDay === today && route.status !== "CONCLUIDA";
+  useRouteTracking({
+    routeId: tracking ? route.id : null,
+    stops: route?.stops ?? [],
+    onArrive: (stopId) => handleToggle(stopId, true, { auto: true }),
+  });
+  const { data: trail } = useRouteTrack(route && mode === "run" ? route.id : null);
 
   function handleStatusChange(status: RouteStatus) {
     if (!route) return;
@@ -247,7 +264,7 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
             ? {
                 tone: "ok",
                 text: undoVisit.visited
-                  ? `${undoVisit.name} marcada como visitada às ${visitedTimeLabel(undoVisit.at)}.`
+                  ? `${undoVisit.auto ? "Chegada detectada: " : ""}${undoVisit.name} marcada como visitada às ${visitedTimeLabel(undoVisit.at)}.`
                   : `${undoVisit.name} desmarcada.`,
                 dismiss: () => setUndoVisit(null),
                 action: {
@@ -398,6 +415,15 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
                     <span className="text-xs text-muted-foreground">Cadastrar empresa ou marcar como não é visita</span>
                   </span>
                 </DropdownMenuItem>
+                <DropdownMenuItem className="items-start py-2" onClick={() => setAutoCheckin(!autoCheckin)}>
+                  {autoCheckin ? <LocateFixedIcon className="mt-0.5" /> : <LocateOffIcon className="mt-0.5" />}
+                  <span className="flex flex-col">
+                    <span className="font-medium">Check-in automático: {autoCheckin ? "ligado" : "desligado"}</span>
+                    <span className="text-xs text-muted-foreground">
+                      Na rota de hoje, marca a parada ao ficar 1 min nela e grava o trajeto
+                    </span>
+                  </span>
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => setManageOpen(true)}>
                   <Settings2Icon />
@@ -459,7 +485,7 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
           />
 
           <div className={cn("flex-1 min-w-0", mobileTab === "map" ? "flex" : "hidden sm:block")}>
-            <RouteMap stops={route.stops} dark={resolvedTheme === "dark"} userImage={userImage} />
+            <RouteMap stops={route.stops} dark={resolvedTheme === "dark"} userImage={userImage} trail={trail} />
           </div>
         </div>
       )}

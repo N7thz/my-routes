@@ -100,3 +100,21 @@ export const savedFilterCreateSchema = z.object({
 export const ignoredEventTitleCreateSchema = z.object({
   label: requiredText("Título").max(200, "Título com no máximo 200 caracteres"),
 });
+
+// --- Trajeto (GPS) ---
+
+/** Lote de posições enviado pelo aparelho durante a rota. */
+export const routeTrackSchema = z.object({
+  points: z
+    .array(
+      z.object({
+        lat: z.number().min(-90).max(90),
+        lng: z.number().min(-180).max(180),
+        accuracy: z.number().nonnegative().nullish(),
+        /** Momento da leitura, em ms desde a época (o envio pode atrasar). */
+        at: z.number().int().positive(),
+      })
+    )
+    .min(1)
+    .max(500),
+});

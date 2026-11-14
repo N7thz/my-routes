@@ -14,6 +14,8 @@ model Route {
   date      DateTime?   @db.Date
   status    RouteStatus @default(RASCUNHO)
   stops     Stop[]
+  // Trajeto feito no dia (GPS do aparelho), para o histórico e o mapa.
+  points    RoutePoint[]
   createdAt DateTime    @default(now()) @map("created_at")
   updatedAt DateTime    @updatedAt @map("updated_at")
 
@@ -40,4 +42,19 @@ model Stop {
 
   @@unique([routeId, calendarEventId])
   @@map("stop")
+}
+
+// Posição do usuário gravada durante a execução da rota. Só entra ponto quando
+// o aparelho andou o bastante (ou passou tempo), então são poucas linhas por dia.
+model RoutePoint {
+  id         String   @id @default(cuid())
+  routeId    String   @map("route_id")
+  route      Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  lat        Float
+  lng        Float
+  accuracy   Float?
+  recordedAt DateTime @map("recorded_at")
+
+  @@index([routeId, recordedAt])
+  @@map("route_point")
 }
