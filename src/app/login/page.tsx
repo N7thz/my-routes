@@ -140,12 +140,12 @@ export default function LoginPage() {
           <div className="hero-enter mt-9 flex w-full flex-col gap-3 sm:w-auto sm:flex-row" style={ordem(3)}>
             <BotaoCamadas primario onClick={() => handleSignIn("google")} disabled={loading !== null}>
               <GoogleIcon />
-              {loading === "google" ? "Redirecionando..." : "Continuar com Google"}
+              {loading === "google" ? "Redirecionando…" : "Continuar com Google"}
             </BotaoCamadas>
 
             <BotaoCamadas onClick={() => handleSignIn("notion")} disabled={loading !== null}>
               <NotionIcon />
-              {loading === "notion" ? "Redirecionando..." : "Continuar com Notion"}
+              {loading === "notion" ? "Redirecionando…" : "Continuar com Notion"}
             </BotaoCamadas>
           </div>
         </div>

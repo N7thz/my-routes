@@ -38,7 +38,10 @@ export function ConsentCard({ consentCode, clientName, userEmail, scopes }: Prop
     return (
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>Pedido inválido ou expirado</CardTitle>
+          <CardTitle>
+            {/* O preflight do Tailwind zera o estilo do h1: o visual continua o do CardTitle. */}
+            <h1>Pedido inválido ou expirado</h1>
+          </CardTitle>
           <CardDescription>Volte ao aplicativo e tente conectar o My Routes de novo.</CardDescription>
         </CardHeader>
       </Card>
@@ -48,7 +51,9 @@ export function ConsentCard({ consentCode, clientName, userEmail, scopes }: Prop
   return (
     <Card className="w-full max-w-md">
       <CardHeader>
-        <CardTitle>Conectar {clientName} ao My Routes?</CardTitle>
+        <CardTitle>
+          <h1>Conectar {clientName} ao My Routes?</h1>
+        </CardTitle>
         <CardDescription>
           Entrando como <span className="font-medium text-foreground">{userEmail}</span>. Com o acesso, o {clientName}{" "}
           pode ler e alterar suas empresas, rotas e agenda pelas ferramentas do MCP (nada é apagado).
@@ -74,10 +79,10 @@ export function ConsentCard({ consentCode, clientName, userEmail, scopes }: Prop
         )}
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button variant="outline" onClick={() => answer(false)} disabled={pending !== null}>
-            {pending === "deny" ? "Recusando..." : "Recusar"}
+            {pending === "deny" ? "Recusando…" : "Recusar"}
           </Button>
           <Button onClick={() => answer(true)} disabled={pending !== null}>
-            {pending === "accept" ? "Autorizando..." : "Autorizar"}
+            {pending === "accept" ? "Autorizando…" : "Autorizar"}
           </Button>
         </div>
       </CardFooter>
