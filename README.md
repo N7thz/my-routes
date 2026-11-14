@@ -1,36 +1,91 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# my-routes
 
-## Getting Started
+Organizador de visitas para quem roda empresas presencialmente. A agenda do Google vira rota: eventos do dia → empresas da visita → endereços geocodificados → rota com ordem otimizada, pronta para executar no celular (inclusive offline).
 
-First, run the development server:
+Feito para uso pessoal (um técnico/fiscal, quase tudo no RJ). Detalhes de produto em [`PRODUCT.md`](PRODUCT.md) e do visual em [`DESIGN.md`](DESIGN.md).
+
+## Funcionalidades
+
+- **Empresas**: cadastro com status, grupos, e-mails vinculados e preenchimento automático pelo CNPJ (BrasilAPI). Filtros salvos, transferência entre listas e importação/exportação com o Notion.
+- **Agenda**: leitura de uma ou mais contas do Google Calendar; os eventos casam pelo nome com qualquer empresa cadastrada. Os que não citam nenhuma aparecem em "Eventos sem empresa" (tela de rotas), onde viram cadastro com o formulário preenchido pelo evento ou são marcados como "não é visita".
+- **Rotas**: rota por dia ou por janela de datas, ordem otimizada (OSRM), mapa (MapLibre + MapTiler), navegação até a parada (Google Maps/Waze), painel de execução do dia, resumo e desfazer.
+- **Rota automática**: um cron diário sincroniza a agenda e gera a rota do dia sozinho.
+- **Geocodificação**: Geoapify com Nominatim como reserva, respeitando limites; endereços não encontrados ficam marcados.
+- **Uso das APIs**: o consumo das APIs com cota é acompanhado no app; área de admin restrita por e-mail.
+- **Servidor MCP**: `/api/mcp` (Streamable HTTP) com tokens pessoais gerados no perfil, para agentes consultarem empresas e rotas.
+- **PWA** instalável, com a rota do dia disponível sem sinal (`/offline`).
+
+Regra do projeto: **só serviços gratuitos**, nada que exija billing.
+
+## Stack
+
+- [Next.js 16](https://nextjs.org) (App Router) + React 19, rodando com [Bun](https://bun.sh)
+- Tailwind CSS 4 + componentes [ui-sdk](https://www.npmjs.com/package/@ui-sdk/react) com API do shadcn (`src/components/ui/*`)
+- Prisma 7 + Postgres (schema em pasta: `prisma/schema/*.prisma`)
+- Better Auth (login com Google)
+- TanStack Query, nuqs, React Hook Form + Zod, FullCalendar, MapLibre GL
+- Biome (lint/format) e `bun test` com happy-dom
+
+> Esta versão do Next tem mudanças incompatíveis com versões antigas. Veja `AGENTS.md` e a documentação em `node_modules/next/dist/docs/`.
+
+## Rodando localmente
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+bun install          # também roda prisma generate e copia o worker do MapLibre
+bun run db:migrate   # aplica as migrations no banco do .env
+bun run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Variáveis de ambiente (`.env`)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Variável | Para quê |
+| --- | --- |
+| `DATABASE_URL` | Conexão do Postgres (pooler) |
+| `DIRECT_URL` | Conexão direta, usada pelas migrations |
+| `NEXT_PUBLIC_APP_URL` | URL pública do app (auth e callbacks) |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Login e acesso ao Google Calendar |
+| `ALLOWED_EMAILS` | E-mails autorizados a entrar (separados por vírgula) |
+| `ADMIN_EMAILS` | E-mails com acesso à área de admin |
+| `GEOAPIFY_API_KEY` | Geocodificação |
+| `NEXT_PUBLIC_MAPTILER_KEY` | Tiles do mapa |
+| `NOTION_CLIENT_ID` / `NOTION_CLIENT_SECRET` | OAuth do Notion |
+| `NOTION_COMPANIES_DB_ID` / `NOTION_INSPECTION_TEMPLATE_ID` | Base de empresas e template de vistoria no Notion |
+| `CRON_SECRET` | Protege `/api/cron/sync-routes` |
+| `CRON_USER_EMAIL` | Usuário que o cron sempre processa |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Scripts
 
-## Learn More
+| Comando | O que faz |
+| --- | --- |
+| `bun run dev` / `build` / `start` | Desenvolvimento, build (com `prisma generate`) e produção |
+| `bun run lint` / `lint:fix` / `format` | Biome |
+| `bun test` | Testes |
+| `bun run db:migrate` | Cria e aplica migration em dev |
+| `bun run db:migrate:create` | Só cria a migration |
+| `bun run db:diff` | SQL da diferença entre o banco e o schema |
+| `bun run db:deploy` / `db:status` | Aplica migrations pendentes / mostra o estado |
+| `bun run db:studio` | Prisma Studio |
+| `bun run db:seed` | Seed do banco |
 
-To learn more about Next.js, take a look at the following resources:
+Scripts avulsos de migração e enriquecimento de dados ficam em `scripts/`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Estrutura
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+src/
+  app/
+    (app)/        telas autenticadas: início, empresas, agenda, rotas, perfil, admin
+    api/          rotas de API (empresas, rotas, calendário, cnpj, cron, mcp, tokens, uso…)
+    login/        login
+    offline/      rota do dia sem conexão
+  components/     telas e componentes; ui/ são os wrappers do ui-sdk
+  hooks/          hooks do TanStack Query
+  lib/            serviços (rotas, sync com a agenda, geocodificação, auth, MCP…)
+prisma/
+  schema/         um arquivo .prisma por domínio
+  migrations/
+```
 
-## Deploy on Vercel
+## Deploy
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Pensado para a Vercel. O `vercel.json` agenda o cron `GET /api/cron/sync-routes` todo dia às 09:00 UTC (06:00 em Brasília); configure `CRON_SECRET` no projeto para ele funcionar. Rode `bun run db:deploy` para aplicar as migrations no banco de produção.
