@@ -52,3 +52,11 @@ next-env.d.ts
 /scripts/screenshots/
 
 .vercel
+
+# worker do MapLibre, copiado no postinstall
+/public/maplibre/
+
+# Impeccable: binário baixado pelo launcher e cache do hook
+/.claude/skills/impeccable/scripts/bin/
+/.impeccable/hook.cache.json
+/.impeccable/config.local.json
