@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import type { CalendarEvent } from "@/lib/google-calendar-service";
-import { buildCandidates, matchCompany, normalizeText, type DayCompany } from "@/lib/route-sync-match";
+import {
+  buildCandidates,
+  findUnmatchedEvents,
+  matchCompany,
+  normalizeText,
+  type DayCompany,
+} from "@/lib/route-sync-match";
 
 const company = (id: string, name: string, address: string | null = `Rua ${name}, 1`): DayCompany => ({
   id,
@@ -75,5 +81,63 @@ describe("buildCandidates", () => {
 
   test("empresa do dia sem endereço não vira parada", () => {
     expect(buildCandidates([], [company("a", "Sem Endereço", null)])).toEqual([]);
+  });
+});
+
+describe("buildCandidates com todas as empresas e títulos ignorados", () => {
+  test("casa com empresa cadastrada que não está agendada para o dia", () => {
+    const all = [company("z", "Padaria Central")];
+    const result = buildCandidates([event("e1", "Visita Padaria Central")], [], { allCompanies: all });
+    expect(result).toEqual([
+      {
+        calendarEventId: "e1",
+        companyId: "z",
+        label: "Visita Padaria Central",
+        address: "Rua Padaria Central, 1",
+        lat: null,
+        lng: null,
+      },
+    ]);
+  });
+
+  test("a empresa agendada para o dia vence a de fora", () => {
+    const day = [company("a", "Metalúrgica Silva")];
+    const all = [company("z", "Silva Metalúrgica Silva Ltda"), ...day];
+    const result = buildCandidates([event("e1", "Inspeção Metalúrgica Silva")], day, { allCompanies: all });
+    expect(result[0]?.companyId).toBe("a");
+  });
+
+  test("evento com título ignorado fica fora, mesmo com local", () => {
+    const result = buildCandidates([event("e1", "Dentista", "Av. Brasil, 100")], [], {
+      ignoredTitles: new Set(["dentista"]),
+    });
+    expect(result).toEqual([]);
+  });
+});
+
+describe("findUnmatchedEvents", () => {
+  test("agrupa por título normalizado, junta dias e pega o primeiro local", () => {
+    const events = [
+      event("e2", "Padaria Nova", undefined, "2026-11-13T10:00:00-03:00"),
+      event("e1", "padaria nova", "Rua A, 1", "2026-11-12T09:00:00-03:00"),
+      event("e3", "Padaria Nova", "Rua B, 2", "2026-11-13T15:00:00-03:00"),
+    ];
+    expect(findUnmatchedEvents(events, [])).toEqual([
+      {
+        title: "padaria nova",
+        label: "padaria nova",
+        location: "Rua A, 1",
+        days: ["2026-11-12", "2026-11-13"],
+        firstStart: "2026-11-12T09:00:00-03:00",
+        count: 3,
+      },
+    ]);
+  });
+
+  test("pula eventos que citam empresa cadastrada, sem título, cancelados ou ignorados", () => {
+    const cancelled = { ...event("e4", "Cancelado"), status: "cancelled" } as CalendarEvent;
+    const events = [event("e1", "Visita Metalúrgica Silva"), event("e2"), event("e3", "Almoço"), cancelled];
+    const result = findUnmatchedEvents(events, [company("a", "Metalúrgica Silva")], new Set(["almoco"]));
+    expect(result).toEqual([]);
   });
 });

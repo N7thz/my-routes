@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
 import { ROUTES_KEY } from "@/hooks/use-routes";
+import { UNMATCHED_EVENTS_KEY } from "@/hooks/use-unmatched-events";
 import type { CalendarRouteSyncResult } from "@/lib/route-sync-service";
 
 /** Intervalo mínimo entre sincronizações automáticas ao abrir a página. */
@@ -40,6 +41,8 @@ function useSyncCalendarRoutes() {
       const changed =
         result.routesCreated + result.stopsAdded + result.stopsUpdated + result.stopsRemoved;
       if (changed > 0) queryClient.invalidateQueries({ queryKey: ROUTES_KEY });
+      // Empresas novas ou títulos ignorados mudam quais eventos ficam sem empresa.
+      queryClient.invalidateQueries({ queryKey: UNMATCHED_EVENTS_KEY });
     },
   });
 }

@@ -33,7 +33,8 @@ A agenda vira rota sozinha: eventos do Google Calendar → empresas da visita �
 - Só serviços gratuitos: nada com billing, nem com crédito grátis (mapas, geocodificação etc.). O uso das APIs com limite é acompanhado no app.
 - Idioma: pt-BR.
 - Stack existente: Next.js 16 (App Router), Tailwind 4, componentes ui-sdk com API do shadcn em `src/components/ui/*`, Prisma + Postgres (Supabase), Better Auth.
-- Em aberto: rastreamento GPS em tempo real durante a rota e adição automática de empresas a partir de eventos estão no roadmap, ainda não implementados.
+- Eventos da agenda casam com qualquer empresa cadastrada pelo nome. Os que não citam nenhuma aparecem em "Eventos sem empresa" (tela de rotas), onde viram empresa com o formulário já preenchido ou são marcados como "não é visita" (o título sai da rota e da lista).
+- O mapa da rota mostra a posição do usuário ao vivo (GPS do aparelho). Em aberto: check-in automático ao chegar na parada e histórico do trajeto.
 
 ## Product Principles
 

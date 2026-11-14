@@ -61,7 +61,7 @@ function GroupSelect({ value, onChange }: { value: string; onChange: (v: string)
   );
 }
 
-type CompanyForm = {
+export type CompanyForm = {
   name: string;
   cnpj: string;
   address: string;
@@ -72,7 +72,7 @@ type CompanyForm = {
   groupId: string;
 };
 
-function initialForm(company: CompanyRecord | null): CompanyForm {
+function initialForm(company: CompanyRecord | null, prefill?: Partial<CompanyForm>): CompanyForm {
   if (!company) {
     return {
       name: "",
@@ -83,6 +83,7 @@ function initialForm(company: CompanyRecord | null): CompanyForm {
       time: "",
       observations: "",
       groupId: "",
+      ...prefill,
     };
   }
   return {
@@ -105,17 +106,21 @@ function initialForm(company: CompanyRecord | null): CompanyForm {
 function CompanyFormFields({
   editing,
   company: currentCompany,
+  prefill,
+  onSaved,
   onClose,
 }: {
   editing: boolean;
   company: CompanyRecord | null;
+  prefill?: Partial<CompanyForm>;
+  onSaved?: (company: CompanyRecord) => void;
   onClose: () => void;
 }) {
   const [company] = useState(currentCompany);
   const create = useCreateCompany();
   const update = useUpdateCompany();
   const cnpjLookup = useCnpjLookup();
-  const [form, setForm] = useState(() => initialForm(company));
+  const [form, setForm] = useState(() => initialForm(company, prefill));
   const isPending = create.isPending || update.isPending;
 
   function set<K extends keyof CompanyForm>(key: K, value: CompanyForm[K]) {
@@ -144,8 +149,10 @@ function CompanyFormFields({
       observations: form.observations || null,
       groupId: form.groupId || null,
     };
-    if (company) await update.mutateAsync({ id: company.id, data });
-    else await create.mutateAsync(data);
+    const saved = company
+      ? await update.mutateAsync({ id: company.id, data })
+      : await create.mutateAsync(data);
+    onSaved?.(saved);
     onClose();
   }
 
@@ -255,16 +262,23 @@ function CompanyFormFields({
   );
 }
 
-/** Diálogo de empresa: `mode="create"` para uma nova, `mode="edit"` com a `company` a editar. */
+/**
+ * Diálogo de empresa: `mode="create"` para uma nova, `mode="edit"` com a `company` a editar.
+ * `prefill` preenche campos de uma empresa nova (ex.: a partir de um evento da agenda).
+ */
 export function CompanyFormDialog({
   mode,
   open,
   company = null,
+  prefill,
+  onSaved,
   onClose,
 }: {
   mode: "create" | "edit";
   open: boolean;
   company?: CompanyRecord | null;
+  prefill?: Partial<CompanyForm>;
+  onSaved?: (company: CompanyRecord) => void;
   onClose: () => void;
 }) {
   return (
@@ -273,7 +287,13 @@ export function CompanyFormDialog({
         <DialogHeader>
           <DialogTitle>{mode === "edit" ? "Editar Empresa" : "Nova Empresa"}</DialogTitle>
         </DialogHeader>
-        <CompanyFormFields editing={mode === "edit"} company={company} onClose={onClose} />
+        <CompanyFormFields
+          editing={mode === "edit"}
+          company={company}
+          prefill={prefill}
+          onSaved={onSaved}
+          onClose={onClose}
+        />
       </DialogContent>
     </Dialog>
   );

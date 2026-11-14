@@ -1,16 +1,17 @@
 model User {
-  id            String             @id
-  name          String
-  email         String             @unique
-  emailVerified Boolean
-  image         String?
-  createdAt     DateTime
-  updatedAt     DateTime
-  sessions      Session[]
-  accounts      Account[]
-  routes        Route[]
-  autoRoute     AutoRouteSettings?
-  savedFilters  SavedFilter[]
+  id                 String              @id
+  name               String
+  email              String              @unique
+  emailVerified      Boolean
+  image              String?
+  createdAt          DateTime
+  updatedAt          DateTime
+  sessions           Session[]
+  accounts           Account[]
+  routes             Route[]
+  autoRoute          AutoRouteSettings?
+  savedFilters       SavedFilter[]
+  ignoredEventTitles IgnoredEventTitle[]
 
   @@map("user")
 }

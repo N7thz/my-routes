@@ -5,7 +5,8 @@ import { geocodeNewStops } from "@/lib/geocode";
 import { dayRange, todayKey } from "@/lib/dates";
 import { getGoogleCalendarTokenForUser, type GoogleUnavailableReason } from "@/lib/google-auth";
 import { eventStart, listCalendarEvents, type CalendarEvent } from "@/lib/google-calendar-service";
-import { buildCandidates } from "@/lib/route-sync-match";
+import { buildCandidates, findUnmatchedEvents, type DayCompany, type UnmatchedEvent } from "@/lib/route-sync-match";
+import { ignoredTitleSet } from "@/lib/calendar-ignore-service";
 import {
   companiesOnDay,
   dayRouteName,
@@ -105,6 +106,63 @@ const CALENDAR_DAYS_AHEAD = 30;
 /** Teto de eventos por sincronização; se bater, a resposta pode estar truncada. */
 const CALENDAR_MAX_EVENTS = 2500;
 
+type UpcomingEvents =
+  | { ok: true; events: CalendarEvent[]; truncated: boolean }
+  | { ok: false; reason: GoogleUnavailableReason };
+
+/**
+ * Eventos da agenda de hoje até `CALENDAR_DAYS_AHEAD` dias, sem os cancelados
+ * nem os que começam antes de hoje no fuso da operação.
+ */
+async function fetchUpcomingEvents(userId: string): Promise<UpcomingEvents> {
+  const token = await getGoogleCalendarTokenForUser(userId);
+  if (!token.hasCalendarScope) return { ok: false, reason: token.reason };
+
+  const today = todayKey(APP_TIME_ZONE);
+  const from = dayRange(today).start;
+  const until = new Date(from);
+  until.setUTCDate(until.getUTCDate() + CALENDAR_DAYS_AHEAD);
+
+  const all = await listCalendarEvents(token.accessToken, {
+    timeMin: from.toISOString(),
+    timeMax: until.toISOString(),
+    maxResults: CALENDAR_MAX_EVENTS,
+  });
+
+  const events = all.filter((event) => {
+    if (event.status === "cancelled") return false;
+    const day = eventStart(event).slice(0, 10);
+    // `timeMin` em UTC pega algumas horas da noite anterior no fuso local.
+    return day !== "" && day >= today;
+  });
+
+  // Resposta possivelmente truncada: um evento ausente aqui não prova que ele
+  // saiu da agenda, então quem remove paradas não remove nada nessa rodada.
+  return { ok: true, events, truncated: all.length >= CALENDAR_MAX_EVENTS };
+}
+
+/** Todas as empresas, no formato usado para casar evento com empresa. */
+function allMatchableCompanies(): Promise<DayCompany[]> {
+  return prisma.company.findMany({
+    select: { id: true, name: true, address: true, lat: true, lng: true },
+  });
+}
+
+export type UnmatchedEventsOutcome =
+  | { ok: true; events: UnmatchedEvent[] }
+  | { ok: false; reason: GoogleUnavailableReason };
+
+/**
+ * Eventos dos próximos dias que não citam nenhuma empresa cadastrada (nem
+ * foram marcados como "não é visita"), agrupados pelo título.
+ */
+export async function listUnmatchedEvents(userId: string): Promise<UnmatchedEventsOutcome> {
+  const upcoming = await fetchUpcomingEvents(userId);
+  if (!upcoming.ok) return upcoming;
+  const [allCompanies, ignoredTitles] = await Promise.all([allMatchableCompanies(), ignoredTitleSet(userId)]);
+  return { ok: true, events: findUnmatchedEvents(upcoming.events, allCompanies, ignoredTitles) };
+}
+
 export type CalendarRouteSyncResult = {
   eventsConsidered: number;
   daysWithEvents: number;
@@ -134,34 +192,22 @@ export type CalendarRouteSyncOutcome =
 export async function syncCalendarEventsToRoutes(
   userId: string
 ): Promise<CalendarRouteSyncOutcome> {
-  const token = await getGoogleCalendarTokenForUser(userId);
-  if (!token.hasCalendarScope) return { ok: false, reason: token.reason };
-
-  const today = todayKey(APP_TIME_ZONE);
-  const from = dayRange(today).start;
-  const until = new Date(from);
-  until.setUTCDate(until.getUTCDate() + CALENDAR_DAYS_AHEAD);
-
-  const events = await listCalendarEvents(token.accessToken, {
-    timeMin: from.toISOString(),
-    timeMax: until.toISOString(),
-    maxResults: CALENDAR_MAX_EVENTS,
-  });
-
-  // Resposta possivelmente truncada: um evento ausente aqui não prova que ele
-  // saiu da agenda, então não removemos nada nessa rodada.
-  const truncated = events.length >= CALENDAR_MAX_EVENTS;
+  const upcoming = await fetchUpcomingEvents(userId);
+  if (!upcoming.ok) return upcoming;
+  const { events, truncated } = upcoming;
 
   const byDay = new Map<string, CalendarEvent[]>();
   for (const event of events) {
-    if (event.status === "cancelled") continue;
     const day = eventStart(event).slice(0, 10);
-    // `timeMin` em UTC pega algumas horas da noite anterior no fuso local.
-    if (!day || day < today) continue;
     const list = byDay.get(day) ?? [];
     list.push(event);
     byDay.set(day, list);
   }
+
+  // Um evento que cita uma empresa cadastrada vira parada dela mesmo que a
+  // empresa não esteja agendada para o dia; títulos marcados como "não é
+  // visita" ficam de fora.
+  const [allCompanies, ignoredTitles] = await Promise.all([allMatchableCompanies(), ignoredTitleSet(userId)]);
 
   const result: CalendarRouteSyncResult = {
     eventsConsidered: 0,
@@ -179,7 +225,7 @@ export async function syncCalendarEventsToRoutes(
     const dayEvents = byDay.get(day)!.sort((a, b) => eventStart(a).localeCompare(eventStart(b)));
     result.eventsConsidered += dayEvents.length;
 
-    const candidates = buildCandidates(dayEvents, await companiesOnDay(day));
+    const candidates = buildCandidates(dayEvents, await companiesOnDay(day), { allCompanies, ignoredTitles });
     if (candidates.length === 0) continue;
 
     const { route, created } = await findOrCreateDayRoute(userId, day);

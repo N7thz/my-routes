@@ -1,0 +1,17 @@
+// Título de evento da agenda que o usuário marcou como "não é visita"
+// (ex.: "Dentista", "Almoço"). A sincronização agenda → rota ignora eventos com
+// esse título e eles deixam de aparecer na lista de eventos sem empresa.
+// `title` é o título normalizado (sem acento, minúsculo), então pega todas as
+// ocorrências de um evento recorrente.
+model IgnoredEventTitle {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  // Título como estava no evento, para mostrar na tela.
+  label     String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, title])
+  @@map("ignored_event_title")
+}

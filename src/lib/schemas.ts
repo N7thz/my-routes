@@ -94,3 +94,9 @@ export const savedFilterCreateSchema = z.object({
   // Query string dos filtros, no formato do nuqs ("" = filtros padrão).
   query: z.string().max(2000),
 });
+
+// --- Agenda: eventos que não são visita ---
+
+export const ignoredEventTitleCreateSchema = z.object({
+  label: requiredText("Título").max(200, "Título com no máximo 200 caracteres"),
+});

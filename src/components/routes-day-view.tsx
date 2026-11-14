@@ -5,6 +5,7 @@ import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import { useRoutes, useRouteDays, useMarkStopVisited, useUpdateRoute, useReorderStops } from "@/hooks/use-routes";
 import { useAutoSyncCalendarRoutes } from "@/hooks/use-sync-calendar-routes";
+import { useUnmatchedEvents } from "@/hooks/use-unmatched-events";
 import { useRunAutoRoute } from "@/hooks/use-auto-route";
 import { ApiError } from "@/lib/api-client";
 import { dayKey, defaultRoutesFrom, shiftDayKey, todayKey } from "@/lib/dates";
@@ -21,6 +22,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
+  BuildingIcon,
   CalendarSyncIcon,
   EllipsisIcon,
   ListIcon,
@@ -37,6 +39,7 @@ import { EmptyDay, EmptyState } from "@/components/routes/day-empty-states";
 import { RoutePicker } from "@/components/routes/route-picker";
 import { RouteTitle } from "@/components/routes/route-title";
 import { StopsPanel } from "@/components/routes/stops-panel";
+import { UnmatchedEventsSheet } from "@/components/routes/unmatched-events-sheet";
 
 export function RoutesDayView({ userImage }: { userImage?: string | null }) {
   const { data: days = [], isLoading: daysLoading } = useRouteDays();
@@ -55,6 +58,9 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
   const [loadingStopId, setLoadingStopId] = useState<string | null>(null);
   const [mobileTab, setMobileTab] = useState<"stops" | "map">("stops");
   const [manageOpen, setManageOpen] = useState(false);
+  // Eventos da agenda que não citam nenhuma empresa: candidatos a cadastro.
+  const { data: unmatched = [] } = useUnmatchedEvents();
+  const [unmatchedOpen, setUnmatchedOpen] = useState(false);
   // Ordem anterior à última reordenação, para o "Desfazer".
   const [undoVisit, setUndoVisit] = useState<{
     routeId: string;
@@ -146,18 +152,26 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
     reorderStops(index, index + dir);
   }
 
-  // Fica fora dos ramos para abrir também a partir do estado vazio.
+  // Ficam fora dos ramos para abrir também a partir do estado vazio.
   const manageSheet = (
-    <Sheet open={manageOpen} onOpenChange={setManageOpen}>
-      <SheetContent side="right" className="w-full max-w-2xl p-0 sm:max-w-2xl">
-        <SheetHeader className="border-b px-6 py-4">
-          <SheetTitle>Gerenciar rotas</SheetTitle>
-        </SheetHeader>
-        <div className="h-[calc(100dvh-73px)] overflow-y-auto p-6">
-          <RoutesView />
-        </div>
-      </SheetContent>
-    </Sheet>
+    <>
+      <Sheet open={manageOpen} onOpenChange={setManageOpen}>
+        <SheetContent side="right" className="w-full max-w-2xl p-0 sm:max-w-2xl">
+          <SheetHeader className="border-b px-6 py-4">
+            <SheetTitle>Gerenciar rotas</SheetTitle>
+          </SheetHeader>
+          <div className="h-[calc(100dvh-73px)] overflow-y-auto p-6">
+            <RoutesView />
+          </div>
+        </SheetContent>
+      </Sheet>
+      <UnmatchedEventsSheet
+        open={unmatchedOpen}
+        onOpenChange={setUnmatchedOpen}
+        events={unmatched}
+        onChanged={() => syncCalendar.mutate()}
+      />
+    </>
   );
 
   // Enquanto a primeira sincronização roda, ainda pode aparecer rota — não
@@ -302,6 +316,20 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
               </Button>
             )}
 
+            {unmatched.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="max-sm:px-2.5"
+                onClick={() => setUnmatchedOpen(true)}
+                title="Eventos da agenda sem empresa cadastrada"
+              >
+                <BuildingIcon />
+                <span className="tabular-nums">{unmatched.length}</span>
+                <span className="max-sm:sr-only">sem empresa</span>
+              </Button>
+            )}
+
             <RoutePicker
               routes={routes}
               activeId={route?.id ?? null}
@@ -359,6 +387,15 @@ export function RoutesDayView({ userImage }: { userImage?: string | null }) {
                   <span className="flex flex-col">
                     <span className="font-medium">Atualizar pela agenda</span>
                     <span className="text-xs text-muted-foreground">Cria e ajusta rotas a partir dos eventos</span>
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuItem className="items-start py-2" onClick={() => setUnmatchedOpen(true)}>
+                  <BuildingIcon className="mt-0.5" />
+                  <span className="flex flex-col">
+                    <span className="font-medium">
+                      Eventos sem empresa{unmatched.length > 0 && ` (${unmatched.length})`}
+                    </span>
+                    <span className="text-xs text-muted-foreground">Cadastrar empresa ou marcar como não é visita</span>
                   </span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
