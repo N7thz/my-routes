@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { ThemeSetting } from "@/components/settings/theme-setting";
 import { AutoRouteSettings } from "@/components/settings/auto-route-settings";
+import { ApiTokens } from "@/components/settings/api-tokens";
 import { ClearCacheButton, ConnectButton, SignOutButton } from "@/components/settings/settings-actions";
 import { LinkEmailButton, UnlinkAccountButton, type LinkedAccount } from "@/components/settings/linked-emails";
 import {
@@ -347,6 +348,13 @@ export default async function PerfilPage({ searchParams }: { searchParams: Promi
           >
             <LinkEmailButton />
           </Row>
+        </Section>
+
+        <Section
+          title="Servidor MCP"
+          description="Tokens pessoais para o Claude Code e outros clientes MCP acessarem suas empresas e rotas."
+        >
+          <ApiTokens />
         </Section>
 
         <Section title="Integrações" description="Contas e serviços externos de onde o app lê e grava dados.">

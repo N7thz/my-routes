@@ -1,0 +1,16 @@
+// Token pessoal (bearer) para acessar o servidor MCP e a API fora do navegador.
+// Só o hash sha256 fica no banco; o token em claro aparece uma única vez, na
+// criação. `prefix` são os primeiros caracteres, só para o usuário reconhecer.
+model ApiToken {
+  id         String    @id @default(cuid())
+  userId     String    @map("user_id")
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  tokenHash  String    @unique @map("token_hash")
+  prefix     String
+  lastUsedAt DateTime? @map("last_used_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("api_token")
+}
