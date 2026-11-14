@@ -60,3 +60,6 @@ next-env.d.ts
 /.claude/skills/impeccable/scripts/bin/
 /.impeccable/hook.cache.json
 /.impeccable/config.local.json
+
+# skills linkadas localmente (o conteúdo real fica em .agents/skills)
+/.claude/skills/
