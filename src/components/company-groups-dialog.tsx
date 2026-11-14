@@ -25,7 +25,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeftIcon, CheckIcon, FolderPlusIcon, PencilIcon, SearchIcon, Trash2Icon } from "lucide-react";
+import {
+  ArrowLeftIcon,
+  CheckIcon,
+  ChevronRightIcon,
+  FolderPlusIcon,
+  PencilIcon,
+  SearchIcon,
+  Trash2Icon,
+} from "lucide-react";
+import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "@ui-sdk/react/collapsible";
+
+/** Quantas empresas aparecem como etiqueta com a seção recolhida. */
+const CHIP_LIMIT = 8;
 
 export const GROUP_COLORS = [
   "#3b82f6",
@@ -37,6 +49,18 @@ export const GROUP_COLORS = [
   "#14b8a6",
   "#64748b",
 ] as const;
+
+/** Nome falado de cada cor, para o leitor de tela não ler o código hex. */
+const COLOR_NAMES: Record<string, string> = {
+  "#3b82f6": "azul",
+  "#10b981": "verde",
+  "#f59e0b": "âmbar",
+  "#ef4444": "vermelho",
+  "#8b5cf6": "roxo",
+  "#ec4899": "rosa",
+  "#14b8a6": "turquesa",
+  "#64748b": "cinza",
+};
 
 const FALLBACK_COLOR = "#64748b";
 
@@ -70,6 +94,7 @@ function GroupForm({
   const q = search.trim().toLowerCase();
   const visible = q ? companies.filter((c) => c.name.toLowerCase().includes(q)) : companies;
   const mutation = group ? update : create;
+  const selectedCompanies = companies.filter((c) => selected.has(c.id));
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -89,8 +114,8 @@ function GroupForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1.5">
+    <form onSubmit={handleSubmit} className="flex min-h-0 min-w-0 flex-1 flex-col gap-5">
+      <div className="flex flex-col gap-2">
         <Label htmlFor="cg-name">Nome *</Label>
         <Input
           id="cg-name"
@@ -102,80 +127,106 @@ function GroupForm({
         />
       </div>
 
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-2">
         <Label>Cor</Label>
-        <div className="flex flex-wrap gap-2">
+        {/* p-1 dá espaço para o anel da cor escolhida não ser cortado. */}
+        <div className="-m-1 flex flex-wrap gap-2.5 p-1">
           {GROUP_COLORS.map((c) => (
             <button
               key={c}
               type="button"
+              aria-pressed={color === c}
+              aria-label={`Cor ${COLOR_NAMES[c] ?? c}`}
               onClick={() => setColor(c)}
-              title={c}
               className={cn(
-                "size-7 rounded-full flex items-center justify-center ring-offset-2 ring-offset-background transition",
+                "flex size-8 shrink-0 items-center justify-center rounded-full ring-offset-2 ring-offset-popover transition-[box-shadow,scale] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 color === c ? "ring-2 ring-foreground" : "hover:scale-110",
               )}
               style={{ backgroundColor: c }}
             >
-              {color === c && <CheckIcon className="size-3.5 text-white" />}
+              {color === c && <CheckIcon className="size-4 text-white drop-shadow-sm" />}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center justify-between">
-          <Label>Empresas</Label>
-          <span className="text-xs text-muted-foreground">
+      {/* Recolhida por padrão quando o grupo já tem empresas: mostra só as marcadas. */}
+      <Collapsible defaultOpen={selected.size === 0} className="group/emp flex min-h-0 flex-1 flex-col gap-2">
+        <CollapsibleTrigger className="-mx-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground transition-transform group-data-open/emp:rotate-90" />
+          <span className="text-sm font-medium">Empresas</span>
+          <span className="ml-auto text-xs text-muted-foreground">
             {selected.size} selecionada{selected.size !== 1 ? "s" : ""}
           </span>
-        </div>
-        <div className="relative">
-          <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Filtrar empresas…"
-            className="pl-8 h-8 text-sm"
-          />
-        </div>
-        <div className="max-h-60 overflow-y-auto rounded-md border divide-y">
-          {visible.length === 0 ? (
-            <p className="text-xs text-muted-foreground text-center py-4">Nenhuma empresa encontrada.</p>
-          ) : (
-            visible.map((c) => {
-              const checked = selected.has(c.id);
-              const inOtherGroup = !checked && c.groupId !== null && c.groupId !== group?.id;
-              return (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => toggle(c.id)}
-                  className="w-full text-left flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
-                >
-                  <span
-                    className={cn(
-                      "size-4 rounded border flex items-center justify-center shrink-0",
-                      checked ? "bg-primary border-primary text-primary-foreground" : "border-input",
-                    )}
+        </CollapsibleTrigger>
+
+        {selected.size > 0 && (
+          <ul className="flex flex-wrap gap-1.5 group-data-open/emp:hidden" aria-label="Empresas do grupo">
+            {selectedCompanies.slice(0, CHIP_LIMIT).map((c) => (
+              <li
+                key={c.id}
+                title={c.name}
+                className="max-w-full truncate rounded-md border bg-muted/40 px-2 py-1 text-xs sm:max-w-[16rem]"
+              >
+                {c.name}
+              </li>
+            ))}
+            {selectedCompanies.length > CHIP_LIMIT && (
+              <li className="px-1 py-1 text-xs text-muted-foreground">+{selectedCompanies.length - CHIP_LIMIT}</li>
+            )}
+          </ul>
+        )}
+
+        <CollapsiblePanel className="flex min-h-0 flex-1 flex-col gap-2">
+          <div className="relative">
+            <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Filtrar empresas…"
+              className="h-9 pl-8 text-sm"
+            />
+          </div>
+          <div className="min-h-24 max-h-[min(26rem,50dvh)] min-w-0 flex-1 divide-y overflow-y-auto overflow-x-hidden overscroll-contain rounded-md border">
+            {visible.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-4">Nenhuma empresa encontrada.</p>
+            ) : (
+              visible.map((c) => {
+                const checked = selected.has(c.id);
+                const inOtherGroup = !checked && c.groupId !== null && c.groupId !== group?.id;
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => toggle(c.id)}
+                    className="flex w-full min-w-0 items-center gap-2.5 px-3 py-2.5 text-left text-sm hover:bg-muted/50 transition-colors"
                   >
-                    {checked && <CheckIcon className="size-3" />}
-                  </span>
-                  <span className="truncate flex-1">{c.name}</span>
-                  {inOtherGroup && <span className="text-xs text-muted-foreground shrink-0">em outro grupo</span>}
-                </button>
-              );
-            })
-          )}
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Uma empresa fica em um grupo só — marcar aqui tira ela do grupo anterior.
-        </p>
-      </div>
+                    <span
+                      className={cn(
+                        "size-4 rounded border flex items-center justify-center shrink-0",
+                        checked ? "bg-primary border-primary text-primary-foreground" : "border-input",
+                      )}
+                    >
+                      {checked && <CheckIcon className="size-3" />}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate" title={c.name}>
+                      {c.name}
+                    </span>
+                    {inOtherGroup && <span className="text-xs text-muted-foreground shrink-0">em outro grupo</span>}
+                  </button>
+                );
+              })
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Uma empresa fica em um grupo só — marcar aqui tira ela do grupo anterior.
+          </p>
+        </CollapsiblePanel>
+      </Collapsible>
 
       {mutation.error && <p className="text-xs text-destructive">{mutation.error.message}</p>}
 
-      <DialogFooter>
+      <DialogFooter className="shrink-0 flex-row justify-end gap-2 sm:space-x-0">
         <Button type="button" variant="outline" onClick={onDone}>
           Cancelar
         </Button>
@@ -227,22 +278,25 @@ export function CompanyGroupsDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+        {/* Coluna com altura limitada: só a lista de empresas rola; título e rodapé ficam fixos. */}
+        <DialogContent className="flex flex-col gap-5 overflow-hidden sm:max-w-xl">
+          <DialogHeader className="pr-8 text-left">
+            <DialogTitle className="flex min-w-0 items-center gap-2 leading-tight">
               {editing && (
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="size-7 -ml-1"
+                  className="-ml-2 size-8 shrink-0"
                   onClick={() => setEditing(null)}
-                  title="Voltar"
+                  aria-label="Voltar para a lista de grupos"
                 >
                   <ArrowLeftIcon className="size-4" />
                 </Button>
               )}
-              {editing === "new" ? "Novo grupo" : editing ? `Editar "${editing.name}"` : "Grupos de empresas"}
+              <span className="truncate">
+                {editing === "new" ? "Novo grupo" : editing ? `Editar “${editing.name}”` : "Grupos de empresas"}
+              </span>
             </DialogTitle>
           </DialogHeader>
 
@@ -255,7 +309,7 @@ export function CompanyGroupsDialog({
               onDone={() => (shownInitial && editing === shownInitial ? handleOpenChange(false) : setEditing(null))}
             />
           ) : (
-            <div className="flex flex-col gap-3">
+            <div className="flex min-h-0 flex-col gap-3">
               {isLoading ? (
                 <div className="flex flex-col gap-2">
                   <Skeleton className="h-11 rounded-md" />
@@ -266,7 +320,7 @@ export function CompanyGroupsDialog({
                   Nenhum grupo ainda. Crie um para organizar as empresas.
                 </p>
               ) : (
-                <div className="flex flex-col gap-1.5 max-h-80 overflow-y-auto pr-1">
+                <div className="-mr-1 flex min-h-0 flex-col gap-1.5 overflow-y-auto pr-1">
                   {groups.map((g) => (
                     <div key={g.id} className="flex items-center gap-3 px-3 py-2 rounded-md border">
                       <GroupDot color={g.color} className="size-2.5" />
@@ -279,7 +333,7 @@ export function CompanyGroupsDialog({
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="size-7"
+                        className="size-7 pointer-coarse:size-10"
                         onClick={() => setEditing(g)}
                         title="Editar"
                       >
@@ -288,7 +342,7 @@ export function CompanyGroupsDialog({
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="size-7 text-destructive hover:text-destructive"
+                        className="size-7 pointer-coarse:size-10 text-destructive hover:text-destructive"
                         onClick={() => setDeleting(g)}
                         title="Excluir"
                       >
