@@ -9,6 +9,7 @@ import { requireUserId } from "@/lib/session";
 import { HttpError, NotFoundError } from "@/lib/http-errors";
 import { dayRange, defaultRoutesFrom, formatDate } from "@/lib/dates";
 import type { RouteStatus } from "../../prisma/generated/enums";
+import { statusFromStops } from "@/lib/route-status";
 
 export type { RouteStatus };
 
@@ -200,6 +201,17 @@ async function requireOwnRoute(routeId: string): Promise<void> {
   if (!route) throw new NotFoundError("Rota não encontrada");
 }
 
+/** Recalcula o status da rota pelas paradas (ver `statusFromStops`). */
+async function syncRouteStatus(routeId: string): Promise<void> {
+  const route = await prisma.route.findUnique({
+    where: { id: routeId },
+    select: { status: true, stops: { select: { visitedAt: true } } },
+  });
+  if (!route) return;
+  const status = statusFromStops(route.status, route.stops);
+  if (status !== route.status) await prisma.route.update({ where: { id: routeId }, data: { status } });
+}
+
 export async function addStop(routeId: string, data: StopCreateInput): Promise<StopRecord> {
   await requireOwnRoute(routeId);
 
@@ -233,6 +245,7 @@ export async function addStop(routeId: string, data: StopCreateInput): Promise<S
     });
   });
 
+  await syncRouteStatus(routeId);
   if (stop.lat === null && stop.address) after(() => geocodeStop(stop.id));
   return stop;
 }
@@ -240,6 +253,7 @@ export async function addStop(routeId: string, data: StopCreateInput): Promise<S
 export async function removeStop(routeId: string, stopId: string): Promise<void> {
   await requireOwnRoute(routeId);
   await prisma.stop.delete({ where: { id: stopId, routeId } });
+  await syncRouteStatus(routeId);
 }
 
 export async function markStopVisited(
@@ -248,11 +262,13 @@ export async function markStopVisited(
   visited: boolean
 ): Promise<StopRecord> {
   await requireOwnRoute(routeId);
-  return prisma.stop.update({
+  const stop = await prisma.stop.update({
     where: { id: stopId, routeId },
     data: { visitedAt: visited ? new Date() : null },
     ...stopInclude,
   });
+  await syncRouteStatus(routeId);
+  return stop;
 }
 
 /** Reordena as paradas: cada id recebe `order` = seu índice na lista. */

@@ -3,7 +3,7 @@ import { apiRoute } from "@/lib/api-handler";
 import { requireUserId } from "@/lib/session";
 import { runAutoRouteForUser } from "@/lib/auto-route-service";
 
-// Runrunit + agenda + geocodificação de algumas paradas + OSRM.
+// Empresas agendadas + agenda + geocodificação de algumas paradas + OSRM.
 export const maxDuration = 60;
 
 /** "Gerar agora": roda a rota automática do usuário logado na hora. */

@@ -38,7 +38,7 @@ export async function api<T = void>(url: string, fallback: string, init: ApiInit
 type Unavailable<R extends string> = { reason: R };
 
 /**
- * Para fontes opcionais (Google, Runrunit): quando a API responde com um
+ * Para fontes opcionais (Google): quando a API responde com um
  * `reason`, a fonte está indisponível, não com defeito — devolve o motivo como
  * dado em vez de lançar, para a tela oferecer a conexão.
  */

@@ -2,11 +2,10 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { todayKey } from "@/lib/dates";
 import { backfillCoordinates, geocodeAddress } from "@/lib/geocode";
-import { isRunrunitConfigured } from "@/lib/runrunit-service";
-import { syncCalendarEventsToRoutes, syncRunrunitTasksToRoutes } from "@/lib/route-sync-service";
+import { syncCalendarEventsToRoutes, syncCompanyDatesToRoutes } from "@/lib/route-sync-service";
 import { optimizeOrder } from "@/lib/route-optimize";
 
-// Rota do dia automática: junta as fontes (Runrunit e Google Agenda) nas rotas
+// Rota do dia automática: junta as fontes (empresas agendadas e Google Agenda) nas rotas
 // dos próximos dias e reordena as paradas pelo melhor trajeto. Roda no cron
 // diário para todos os usuários que ativaram e no botão "Gerar agora".
 
@@ -14,12 +13,11 @@ const APP_TIME_ZONE = "America/Sao_Paulo";
 
 export type AutoRouteSettingsView = {
   enabled: boolean;
-  useRunrunit: boolean;
+  useCompanies: boolean;
   useCalendar: boolean;
   optimizeOrder: boolean;
   originAddress: string | null;
   originGeocoded: boolean;
-  runrunitAvailable: boolean;
   lastRunAt: string | null;
   lastRunOk: boolean | null;
   lastRunSummary: string | null;
@@ -27,7 +25,7 @@ export type AutoRouteSettingsView = {
 
 export type AutoRouteSettingsInput = Partial<{
   enabled: boolean;
-  useRunrunit: boolean;
+  useCompanies: boolean;
   useCalendar: boolean;
   optimizeOrder: boolean;
   originAddress: string | null;
@@ -46,12 +44,11 @@ export async function getAutoRouteSettings(userId: string): Promise<AutoRouteSet
   const s = user.autoRoute;
   return {
     enabled: s?.enabled ?? enabledByDefault(user.email),
-    useRunrunit: s?.useRunrunit ?? true,
+    useCompanies: s?.useCompanies ?? true,
     useCalendar: s?.useCalendar ?? true,
     optimizeOrder: s?.optimizeOrder ?? true,
     originAddress: s?.originAddress ?? null,
     originGeocoded: s?.originLat != null && s?.originLng != null,
-    runrunitAvailable: isRunrunitConfigured(),
     lastRunAt: s?.lastRunAt?.toISOString() ?? null,
     lastRunOk: s?.lastRunOk ?? null,
     lastRunSummary: s?.lastRunSummary ?? null,
@@ -86,7 +83,7 @@ export async function updateAutoRouteSettings(
 type SourceOutcome = { ok: true; routesCreated: number; stopsAdded: number } | { ok: false; error: string };
 
 export type AutoRouteRunResult = {
-  runrunit: SourceOutcome | { skipped: string };
+  companies: SourceOutcome | { skipped: string };
   calendar: SourceOutcome | { skipped: string };
   routesReordered: number;
   changedRouteIds: string[];
@@ -100,16 +97,15 @@ async function syncSources(
 ): Promise<Omit<AutoRouteRunResult, "routesReordered" | "summary">> {
   const changed = new Set<string>();
 
-  let runrunit: AutoRouteRunResult["runrunit"];
-  if (!settings.useRunrunit) runrunit = { skipped: "desativado" };
-  else if (!settings.runrunitAvailable) runrunit = { skipped: "não configurado" };
+  let companies: AutoRouteRunResult["companies"];
+  if (!settings.useCompanies) companies = { skipped: "desativado" };
   else {
     try {
-      const r = await syncRunrunitTasksToRoutes(userId);
+      const r = await syncCompanyDatesToRoutes(userId);
       for (const id of r.changedRouteIds) changed.add(id);
-      runrunit = { ok: true, routesCreated: r.routesCreated, stopsAdded: r.stopsAdded };
+      companies = { ok: true, routesCreated: r.routesCreated, stopsAdded: r.stopsAdded };
     } catch (err) {
-      runrunit = { ok: false, error: err instanceof Error ? err.message : "falha" };
+      companies = { ok: false, error: err instanceof Error ? err.message : "falha" };
     }
   }
 
@@ -128,7 +124,7 @@ async function syncSources(
     }
   }
 
-  return { runrunit, calendar, changedRouteIds: [...changed] };
+  return { companies, calendar, changedRouteIds: [...changed] };
 }
 
 /**
@@ -172,7 +168,7 @@ function describe(result: Omit<AutoRouteRunResult, "summary">): string {
   let stops = 0;
   const notes: string[] = [];
   for (const [label, outcome] of [
-    ["Runrunit", result.runrunit],
+    ["Empresas", result.companies],
     ["Agenda", result.calendar],
   ] as const) {
     if ("skipped" in outcome) continue;
@@ -215,7 +211,7 @@ async function finishRun(
 
   const base = { ...synced, routesReordered };
   const summary = describe(base);
-  const ok = ![synced.runrunit, synced.calendar].some((o) => "ok" in o && !o.ok);
+  const ok = ![synced.companies, synced.calendar].some((o) => "ok" in o && !o.ok);
   await prisma.autoRouteSettings.upsert({
     where: { userId },
     create: { userId, enabled: settings.enabled, lastRunAt: new Date(), lastRunOk: ok, lastRunSummary: summary },

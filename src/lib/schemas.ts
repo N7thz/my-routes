@@ -79,3 +79,18 @@ export const stopVisitedSchema = z.object({ visited: z.boolean().default(true) }
 export const stopReorderSchema = z.object({
   orderedIds: z.array(z.string()).min(1, "orderedIds vazio"),
 });
+
+// --- Filtros salvos ---
+
+/** Telas que têm filtros nomeados. */
+export const SAVED_FILTER_SCREENS = ["empresas", "agenda"] as const;
+export type SavedFilterScreen = (typeof SAVED_FILTER_SCREENS)[number];
+
+export const savedFilterScreenSchema = z.enum(SAVED_FILTER_SCREENS, { error: "tela inválida" });
+
+export const savedFilterCreateSchema = z.object({
+  screen: savedFilterScreenSchema,
+  name: requiredText("Nome").max(60, "Nome com no máximo 60 caracteres"),
+  // Query string dos filtros, no formato do nuqs ("" = filtros padrão).
+  query: z.string().max(2000),
+});

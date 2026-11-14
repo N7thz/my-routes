@@ -1,7 +1,8 @@
 import "server-only";
+import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { geocodeNewStops } from "@/lib/geocode";
 import { dayRange, todayKey } from "@/lib/dates";
-import { listRunrunitTasks } from "@/lib/runrunit-service";
 import { getGoogleCalendarTokenForUser, type GoogleUnavailableReason } from "@/lib/google-auth";
 import { eventStart, listCalendarEvents, type CalendarEvent } from "@/lib/google-calendar-service";
 import { buildCandidates } from "@/lib/route-sync-match";
@@ -38,8 +39,7 @@ function nextStopOrder(stops: { order: number }[]): number {
 }
 
 export type RouteSyncResult = {
-  tasksConsidered: number;
-  daysWithTasks: number;
+  daysWithCompanies: number;
   routesCreated: number;
   stopsAdded: number;
   days: string[];
@@ -48,42 +48,33 @@ export type RouteSyncResult = {
 };
 
 /**
- * Cada dia com tarefa futura do Runrunit vira uma rota (criada se ainda não
- * existe), e as paradas são as empresas agendadas para esse mesmo dia
- * (`Company.date`) — o `client_name` da tarefa (cidade) serve apenas para
- * nomear a rota nova.
+ * Cada dia, de hoje em diante, com empresa agendada (`Company.date`) vira uma
+ * rota (criada se ainda não existe) com essas empresas como paradas.
  *
  * É idempotente: dedup por empresa dentro da rota do dia.
  */
-export async function syncRunrunitTasksToRoutes(userId: string): Promise<RouteSyncResult> {
-  const tasks = await listRunrunitTasks();
+export async function syncCompanyDatesToRoutes(userId: string): Promise<RouteSyncResult> {
   const today = todayKey(APP_TIME_ZONE);
-
-  const dayCities = new Map<string, Set<string>>();
-  let tasksConsidered = 0;
-  for (const task of tasks) {
-    const day = task.desired_date?.slice(0, 10);
-    if (task.is_closed || !day || day < today) continue;
-    tasksConsidered++;
-    const cities = dayCities.get(day) ?? new Set<string>();
-    if (task.client_name) cities.add(task.client_name);
-    dayCities.set(day, cities);
-  }
+  const scheduled = await prisma.company.findMany({
+    where: { date: { gte: dayRange(today).start } },
+    select: { date: true },
+  });
+  const days = [...new Set(scheduled.map((c) => (c.date as Date).toISOString().slice(0, 10)))].sort();
 
   const result: RouteSyncResult = {
-    tasksConsidered,
-    daysWithTasks: dayCities.size,
+    daysWithCompanies: days.length,
     routesCreated: 0,
     stopsAdded: 0,
     days: [],
     changedRouteIds: [],
   };
+  const toGeocode: string[] = [];
 
-  for (const [day, cities] of dayCities) {
+  for (const day of days) {
     const companies = await companiesOnDay(day);
     if (companies.length === 0) continue;
 
-    const { route, created } = await findOrCreateDayRoute(userId, day, [...cities].join(", "));
+    const { route, created } = await findOrCreateDayRoute(userId, day);
     if (created) result.routesCreated++;
     result.days.push(day);
 
@@ -93,16 +84,19 @@ export async function syncRunrunitTasksToRoutes(userId: string): Promise<RouteSy
     if (toAdd.length === 0) continue;
 
     const firstOrder = nextStopOrder(route.stops);
-    await prisma.stop.createMany({
+    const added = await prisma.stop.createManyAndReturn({
       data: toAdd.map((company, i) => ({
         routeId: route.id,
         ...stopFromCompany(company),
         order: firstOrder + i,
       })),
+      select: { id: true, lat: true },
     });
-    result.stopsAdded += toAdd.length;
+    result.stopsAdded += added.length;
+    toGeocode.push(...added.filter((s) => s.lat === null).map((s) => s.id));
   }
 
+  if (toGeocode.length > 0) after(() => geocodeNewStops(toGeocode));
   return result;
 }
 
@@ -134,7 +128,7 @@ export type CalendarRouteSyncOutcome =
  *
  * Idempotente: a parada guarda o `calendarEventId`, então ressincronizar
  * atualiza em vez de duplicar. Paradas vindas da agenda que sumiram dela são
- * removidas — mas nunca as já visitadas nem as de outra origem (Runrunit,
+ * removidas — mas nunca as já visitadas nem as de outra origem (empresas agendadas,
  * manuais), que não têm `calendarEventId`.
  */
 export async function syncCalendarEventsToRoutes(
@@ -179,6 +173,7 @@ export async function syncCalendarEventsToRoutes(
     days: [],
     changedRouteIds: [],
   };
+  const toGeocode: string[] = [];
 
   for (const day of [...byDay.keys()].sort()) {
     const dayEvents = byDay.get(day)!.sort((a, b) => eventStart(a).localeCompare(eventStart(b)));
@@ -213,25 +208,32 @@ export async function syncCalendarEventsToRoutes(
           data: { routeId: route.id, ...candidate, order: nextOrder++ },
         });
         keptStopIds.add(created.id);
+        if (created.lat === null) toGeocode.push(created.id);
         result.stopsAdded++;
         continue;
       }
 
       keptStopIds.add(existing.id);
+      // Endereço novo sem ponto conhecido: o ponto antigo seria do lugar errado.
+      const moved = candidate.address !== existing.address && candidate.lat == null;
       // Nunca apagamos o que já estava preenchido: a agenda só acrescenta.
       const next = {
         calendarEventId: candidate.calendarEventId ?? existing.calendarEventId,
         companyId: candidate.companyId ?? existing.companyId,
         label: candidate.label,
         address: candidate.address,
-        lat: candidate.lat ?? existing.lat,
-        lng: candidate.lng ?? existing.lng,
+        lat: moved ? null : (candidate.lat ?? existing.lat),
+        lng: moved ? null : (candidate.lng ?? existing.lng),
       };
       const changed = (Object.keys(next) as (keyof typeof next)[]).some(
         (key) => next[key] !== existing[key]
       );
       if (changed) {
-        await prisma.stop.update({ where: { id: existing.id }, data: next });
+        await prisma.stop.update({
+          where: { id: existing.id },
+          data: { ...next, ...(moved && { geocodeFailedAt: null }) },
+        });
+        if (next.lat === null) toGeocode.push(existing.id);
         result.stopsUpdated++;
       }
     }
@@ -251,5 +253,6 @@ export async function syncCalendarEventsToRoutes(
     }
   }
 
+  if (toGeocode.length > 0) after(() => geocodeNewStops(toGeocode));
   return { ok: true, ...result };
 }

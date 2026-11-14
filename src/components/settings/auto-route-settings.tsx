@@ -109,19 +109,12 @@ export function AutoRouteSettings() {
         <Toggle label="Gerar rotas automaticamente" checked={settings.enabled} onChange={(v) => set({ enabled: v })} />
       </Row>
 
-      <Row
-        title="Tarefas do Runrunit"
-        description={
-          settings.runrunitAvailable
-            ? "Cria a rota nos dias que têm tarefa do Runrunit."
-            : "Runrunit não configurado no servidor."
-        }
-      >
+      <Row title="Empresas agendadas" description="Cada dia com empresa agendada vira uma rota com elas como paradas.">
         <Toggle
-          label="Usar tarefas do Runrunit"
-          checked={settings.useRunrunit && settings.runrunitAvailable}
-          disabled={off || !settings.runrunitAvailable}
-          onChange={(v) => set({ useRunrunit: v })}
+          label="Usar empresas agendadas"
+          checked={settings.useCompanies}
+          disabled={off}
+          onChange={(v) => set({ useCompanies: v })}
         />
       </Row>
 

@@ -9,6 +9,12 @@ import type {
   StopCreateInput,
   StopRecord,
 } from "@/lib/route-service";
+import { statusFromStops } from "@/lib/route-status";
+
+/** Aplica no cache a mesma regra de status que o servidor aplica. */
+function withStatus(route: RouteRecord): RouteRecord {
+  return { ...route, status: statusFromStops(route.status, route.stops) };
+}
 
 export type { RouteDay, RouteRange, RouteRecord };
 
@@ -132,7 +138,7 @@ export function useMarkStopVisited() {
       routes.map((r) =>
         r.id !== routeId
           ? r
-          : {
+          : withStatus({
               ...r,
               stops: r.stops.map((s) =>
                 // o cache vem de JSON, então datas são strings (como no retorno da API)
@@ -140,7 +146,7 @@ export function useMarkStopVisited() {
                   ? { ...s, visitedAt: visited ? (new Date().toISOString() as unknown as Date) : null }
                   : s,
               ),
-            },
+            }),
       ),
   );
 }

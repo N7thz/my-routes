@@ -7,7 +7,7 @@ import { getAutoRouteSettings, updateAutoRouteSettings } from "@/lib/auto-route-
 const autoRouteSettingsSchema = z
   .object({
     enabled: z.boolean(),
-    useRunrunit: z.boolean(),
+    useCompanies: z.boolean(),
     useCalendar: z.boolean(),
     optimizeOrder: z.boolean(),
     originAddress: z.string().trim().max(300).nullable(),
