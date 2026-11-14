@@ -14,7 +14,7 @@ function allowedEmails(): Set<string> {
     raw
       .split(",")
       .map((e) => e.trim().toLowerCase())
-      .filter(Boolean)
+      .filter(Boolean),
   );
 }
 
@@ -64,10 +64,11 @@ export const auth = betterAuth({
       // prompt:"consent" força o Google a reexibir a tela de autorização. Sem
       // isso, contas já conectadas reaproveitam o consentimento antigo e o
       // token volta SEM o escopo de escrita — mesmo com o scope certo no banco.
-      prompt: "consent",
-      // calendar.events permite ler E criar/editar eventos (necessário para
-      // sincronizar tarefas do Runrunit como eventos). Substitui o antigo
-      // calendar.readonly — usuários já conectados precisam reconectar.
+      // select_account mostra o seletor de contas, para dar para vincular outro
+      // e-mail do Google sem sair da conta atual no navegador.
+      prompt: "select_account consent",
+      // calendar.events dá leitura e escrita. O app hoje só lê a agenda; manter
+      // o escopo evita obrigar quem já está conectado a reconectar.
       scope: ["https://www.googleapis.com/auth/calendar.events"],
     },
     notion: {

@@ -1,11 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
-import type {
-  CompanyRecord,
-  CompanyUpdateInput,
-  CompanyCreateInput,
-  NotionPageResult,
-} from "@/lib/company-service";
+import type { CompanyRecord, CompanyUpdateInput, CompanyCreateInput, NotionPageResult } from "@/lib/company-service";
 
 const COMPANIES_KEY = ["companies"] as const;
 export const COMPANY_GROUPS_KEY = ["company-groups"] as const;
@@ -49,10 +44,37 @@ export function useUpdateCompany() {
   });
 }
 
+/**
+ * Troca o grupo da empresa (arrastar o cartão). Atualiza o cache na hora para o
+ * cartão não "voltar" até a resposta chegar, e desfaz se a API falhar.
+ */
+export function useMoveCompanyToGroup() {
+  const qc = useQueryClient();
+  const invalidate = useInvalidateCompanies();
+  return useMutation({
+    mutationFn: ({ id, groupId }: { id: string; groupId: string | null }) =>
+      api<CompanyRecord>(`/api/companies/${id}`, "Falha ao mover empresa de grupo", {
+        method: "PUT",
+        body: { groupId },
+      }),
+    onMutate: async ({ id, groupId }) => {
+      await qc.cancelQueries({ queryKey: COMPANIES_KEY });
+      const previous = qc.getQueryData<CompanyRecord[]>(COMPANIES_KEY);
+      qc.setQueryData<CompanyRecord[]>(COMPANIES_KEY, (list) =>
+        list?.map((c) => (c.id === id ? { ...c, groupId } : c)),
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) qc.setQueryData(COMPANIES_KEY, context.previous);
+    },
+    onSettled: invalidate,
+  });
+}
+
 export function useDeleteCompany() {
   return useMutation({
-    mutationFn: (id: string) =>
-      api(`/api/companies/${id}`, "Falha ao excluir empresa", { method: "DELETE" }),
+    mutationFn: (id: string) => api(`/api/companies/${id}`, "Falha ao excluir empresa", { method: "DELETE" }),
     onSuccess: useInvalidateCompanies(),
   });
 }

@@ -8,11 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { ThemeSetting } from "@/components/settings/theme-setting";
 import { AutoRouteSettings } from "@/components/settings/auto-route-settings";
-import {
-  ClearCacheButton,
-  ConnectButton,
-  SignOutButton,
-} from "@/components/settings/settings-actions";
+import { ClearCacheButton, ConnectButton, SignOutButton } from "@/components/settings/settings-actions";
+import { LinkEmailButton, UnlinkAccountButton, type LinkedAccount } from "@/components/settings/linked-emails";
 import {
   CheckCircle2Icon,
   XCircleIcon,
@@ -43,17 +40,72 @@ function memberSince(date: Date | string) {
 
 const FEATURES = [
   { done: true, icon: BuildingIcon, title: "Gestão de empresas", desc: "CRUD completo com status, observações e CNPJ" },
-  { done: true, icon: SlidersIcon, title: "Filtros e paginação", desc: "Filtro por status, busca e itens por página via URL" },
-  { done: true, icon: NotebookIcon, title: "Importação do Notion", desc: "Sincronização de empresas a partir de banco Notion" },
-  { done: true, icon: RouteIcon, title: "Planejamento de rotas", desc: "Criação de rotas com paradas ordenadas e empresas vinculadas" },
-  { done: true, icon: MapIcon, title: "Mapa integrado (OpenStreetMap)", desc: "Mapa gratuito com rota calculada via OSRM, sem billing" },
-  { done: true, icon: SmartphoneIcon, title: "Rastreamento GPS em tempo real", desc: "watchPosition com marcador pulsante usando avatar do usuário" },
-  { done: true, icon: MapPinIcon, title: "Controle de paradas visitadas", desc: "Toggle por clique com horário de visita registrado" },
-  { done: true, icon: ZapIcon, title: "Rota do dia em destaque", desc: "Página principal exibe automaticamente a rota do dia atual" },
-  { done: true, icon: DatabaseIcon, title: "Sincronização offline", desc: "PWA instalável com cache local e dados persistidos para uso offline" },
-  { done: true, icon: CalendarIcon, title: "Integração Google Calendar", desc: "Rotas sincronizadas com eventos do Google Agenda" },
-  { done: true, icon: BrainCircuitIcon, title: "Rota automática do dia", desc: "Cron diário cria a rota do dia a partir das tarefas do Runrunit" },
-  { done: false, icon: UsersIcon, title: "Multiusuário e equipes", desc: "Compartilhamento de rotas entre membros da equipe" },
+  {
+    done: true,
+    icon: SlidersIcon,
+    title: "Filtros e paginação",
+    desc: "Filtro por status, busca e itens por página via URL",
+  },
+  {
+    done: true,
+    icon: NotebookIcon,
+    title: "Importação do Notion",
+    desc: "Sincronização de empresas a partir de banco Notion",
+  },
+  {
+    done: true,
+    icon: RouteIcon,
+    title: "Planejamento de rotas",
+    desc: "Criação de rotas com paradas ordenadas e empresas vinculadas",
+  },
+  {
+    done: true,
+    icon: MapIcon,
+    title: "Mapa integrado (OpenStreetMap)",
+    desc: "Mapa gratuito com rota calculada via OSRM, sem billing",
+  },
+  {
+    done: true,
+    icon: SmartphoneIcon,
+    title: "Rastreamento GPS em tempo real",
+    desc: "watchPosition com marcador pulsante usando avatar do usuário",
+  },
+  {
+    done: true,
+    icon: MapPinIcon,
+    title: "Controle de paradas visitadas",
+    desc: "Toggle por clique com horário de visita registrado",
+  },
+  {
+    done: true,
+    icon: ZapIcon,
+    title: "Rota do dia em destaque",
+    desc: "Página principal exibe automaticamente a rota do dia atual",
+  },
+  {
+    done: true,
+    icon: DatabaseIcon,
+    title: "Sincronização offline",
+    desc: "PWA instalável com cache local e dados persistidos para uso offline",
+  },
+  {
+    done: true,
+    icon: CalendarIcon,
+    title: "Integração Google Calendar",
+    desc: "Rotas sincronizadas com eventos do Google Agenda",
+  },
+  {
+    done: true,
+    icon: BrainCircuitIcon,
+    title: "Rota automática do dia",
+    desc: "Cron diário cria as rotas a partir das empresas agendadas e da agenda",
+  },
+  {
+    done: false,
+    icon: UsersIcon,
+    title: "Multiusuário e equipes",
+    desc: "Compartilhamento de rotas entre membros da equipe",
+  },
 ];
 
 type ConnStatus = "connected" | "configured" | "missing";
@@ -72,16 +124,33 @@ function ConnectionBadge({ status }: { status: ConnStatus }) {
   );
 }
 
+/** Mensagens dos códigos de erro que o better-auth devolve em `?error=` no retorno do OAuth. */
+const LINK_ERRORS: Record<string, string> = {
+  account_already_linked_to_different_user:
+    "Esse e-mail já tem uma conta própria no app. Ele só pode ser vinculado se ainda não tiver entrado sozinho.",
+  unable_to_link_account: "Não foi possível vincular a conta. Tente de novo.",
+  access_denied: "O vínculo foi cancelado na tela do Google.",
+};
+
+function linkErrorMessage(code: string | undefined): string | null {
+  if (!code) return null;
+  return LINK_ERRORS[code] ?? `Não foi possível vincular a conta (${code}).`;
+}
+
+/** E-mail da conta OAuth, lido do id_token (o Google manda; o Notion não). */
+function emailFromIdToken(idToken: string | null): string | null {
+  const payload = idToken?.split(".")[1];
+  if (!payload) return null;
+  try {
+    const data = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { email?: unknown };
+    return typeof data.email === "string" ? data.email : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Bloco de configurações: título e descrição à esquerda, conteúdo à direita (empilha no mobile). */
-function Section({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description: string;
-  children: React.ReactNode;
-}) {
+function Section({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
   return (
     <section className="grid gap-4 md:grid-cols-[14rem_1fr] md:gap-8">
       <div>
@@ -120,7 +189,8 @@ function Row({
   );
 }
 
-export default async function PerfilPage() {
+export default async function PerfilPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  const { error: linkError } = await searchParams;
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
@@ -128,7 +198,11 @@ export default async function PerfilPage() {
   startOfToday.setHours(0, 0, 0, 0);
 
   const [accounts, companyCount, routeCount, visitedToday] = await Promise.all([
-    prisma.account.findMany({ where: { userId: user.id }, select: { providerId: true } }),
+    prisma.account.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, providerId: true, accountId: true, idToken: true },
+    }),
     prisma.company.count(),
     prisma.route.count({ where: { userId: user.id } }),
     prisma.stop.count({
@@ -137,6 +211,19 @@ export default async function PerfilPage() {
   ]);
 
   const providers = new Set(accounts.map((a) => a.providerId));
+
+  // Cada login (e-mail do Google ou conta do Notion) vinculado ao mesmo usuário.
+  // O principal é o mais antigo com o e-mail do usuário, ou o primeiro de todos.
+  const linkedAccounts: LinkedAccount[] = accounts.map((a) => ({
+    id: a.id,
+    providerId: a.providerId,
+    accountId: a.accountId,
+    email: emailFromIdToken(a.idToken),
+    primary: false,
+  }));
+  const primary = linkedAccounts.find((a) => a.email?.toLowerCase() === user.email.toLowerCase()) ?? linkedAccounts[0];
+  if (primary) primary.primary = true;
+  const linkErrorText = linkErrorMessage(linkError);
 
   const oauthConnections = [
     {
@@ -155,18 +242,11 @@ export default async function PerfilPage() {
 
   const envConnections: { label: string; desc: string; logo: string; status: ConnStatus; envHint: string }[] = [
     {
-      label: "Runrunit",
-      desc: "Tarefas usadas para montar a rota do dia.",
-      logo: "/integrations/runrunit.png",
-      status: process.env.RUNRUNIT_APP_KEY && process.env.RUNRUNIT_USER_TOKEN ? "configured" : "missing",
-      envHint: "RUNRUNIT_APP_KEY e RUNRUNIT_USER_TOKEN",
-    },
-    {
-      label: "Google Maps",
-      desc: "Mapa avançado com Directions API (exige billing).",
-      logo: "/integrations/google-maps.png",
-      status: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? "configured" : "missing",
-      envHint: "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY",
+      label: "Geoapify",
+      desc: "Geocodificação dos endereços (plano grátis). Sem a chave, o app usa o Nominatim, mais lento e menos preciso em número de rua.",
+      logo: "/integrations/geoapify.svg",
+      status: process.env.GEOAPIFY_API_KEY?.trim() ? "configured" : "missing",
+      envHint: "GEOAPIFY_API_KEY",
     },
   ];
 
@@ -184,9 +264,7 @@ export default async function PerfilPage() {
       <div className="mx-auto max-w-4xl space-y-10 px-4 py-6 pb-28 sm:px-6 md:pb-10">
         <header>
           <h1 className="text-2xl font-bold tracking-tight">Configurações</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Sua conta, aparência e as integrações do app.
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">Sua conta, aparência e as integrações do app.</p>
         </header>
 
         {/* Conta */}
@@ -224,15 +302,54 @@ export default async function PerfilPage() {
 
         <Section
           title="Rota automática"
-          description="Monta as rotas do dia sozinha, a partir do Runrunit e da agenda, na melhor ordem."
+          description="Monta as rotas do dia sozinha, a partir das empresas agendadas e da agenda, na melhor ordem."
         >
           <AutoRouteSettings />
         </Section>
 
         <Section
-          title="Integrações"
-          description="Contas e serviços externos de onde o app lê e grava dados."
+          title="E-mails vinculados"
+          description="Entre com qualquer um destes logins e caia na mesma conta, com as mesmas empresas e rotas."
         >
+          {linkedAccounts.map((a) => (
+            <Row
+              key={a.id}
+              leading={
+                <Logo
+                  src={a.providerId === "notion" ? "/integrations/notion.png" : "/integrations/google.png"}
+                  alt={a.providerId === "notion" ? "Notion" : "Google"}
+                />
+              }
+              title={
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="truncate">
+                    {a.email ?? (a.providerId === "notion" ? "Conta do Notion" : "Conta do Google")}
+                  </span>
+                  {a.primary && (
+                    <Badge className="border-transparent bg-primary/10 text-xs text-primary">Principal</Badge>
+                  )}
+                </span>
+              }
+              description={a.providerId === "notion" ? "Login pelo Notion" : "Login pelo Google"}
+            >
+              <UnlinkAccountButton account={a} disabled={a.primary || linkedAccounts.length <= 1} />
+            </Row>
+          ))}
+          <Row
+            title="Vincular outro e-mail"
+            description={
+              linkErrorText ? (
+                <span className="text-destructive">{linkErrorText}</span>
+              ) : (
+                "Escolha outra conta do Google. Ela passa a entrar nesta conta."
+              )
+            }
+          >
+            <LinkEmailButton />
+          </Row>
+        </Section>
+
+        <Section title="Integrações" description="Contas e serviços externos de onde o app lê e grava dados.">
           {oauthConnections.map((c) => {
             const connected = providers.has(c.provider);
             return (

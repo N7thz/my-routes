@@ -49,38 +49,47 @@ function QuickStatusMenu({ company }: { company: EnrichedCompany }) {
         <button
           type="button"
           onClick={(e) => e.stopPropagation()}
-          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") e.stopPropagation(); }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") e.stopPropagation();
+          }}
           aria-label={`Status de ${company.name}: ${statusCfg?.label ?? "sem status"}`}
           className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {statusCfg ? (
-            <Badge variant={statusCfg.variant} className={cn("text-xs cursor-pointer hover:opacity-75 transition-opacity", statusCfg.className)}>
+            <Badge
+              variant={statusCfg.variant}
+              className={cn("text-xs cursor-pointer hover:opacity-75 transition-opacity", statusCfg.className)}
+            >
               {statusCfg.label}
             </Badge>
           ) : (
-            <Badge variant="outline" className="text-xs cursor-pointer text-muted-foreground hover:opacity-75 transition-opacity">
+            <Badge
+              variant="outline"
+              className="text-xs cursor-pointer text-muted-foreground hover:opacity-75 transition-opacity"
+            >
               Sem status
             </Badge>
           )}
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" onClick={(e) => e.stopPropagation()}>
-        {(Object.entries(STATUS_CONFIG) as [CompanyStatus, typeof STATUS_CONFIG[CompanyStatus]][]).map(([key, cfg]) => (
-          <DropdownMenuItem
-            key={key}
-            onClick={() => handleStatusChange(key)}
-            className={cn("gap-2", company.status === key && "font-semibold")}
-          >
-            <Badge variant={cfg.variant} className={cn("text-xs", cfg.className)}>{cfg.label}</Badge>
-          </DropdownMenuItem>
-        ))}
+        {(Object.entries(STATUS_CONFIG) as [CompanyStatus, (typeof STATUS_CONFIG)[CompanyStatus]][]).map(
+          ([key, cfg]) => (
+            <DropdownMenuItem
+              key={key}
+              onClick={() => handleStatusChange(key)}
+              className={cn("gap-2", company.status === key && "font-semibold")}
+            >
+              <Badge variant={cfg.variant} className={cn("text-xs", cfg.className)}>
+                {cfg.label}
+              </Badge>
+            </DropdownMenuItem>
+          ),
+        )}
         {company.status && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={() => handleStatusChange(null)}
-              className="text-muted-foreground text-xs"
-            >
+            <DropdownMenuItem onClick={() => handleStatusChange(null)} className="text-muted-foreground text-xs">
               Remover status
             </DropdownMenuItem>
           </>
@@ -115,7 +124,9 @@ function MoveToGroupSubmenu({ company }: { company: EnrichedCompany }) {
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent onClick={(e) => e.stopPropagation()}>
         {groups.length === 0 && (
-          <DropdownMenuItem disabled className="text-xs">Nenhum grupo criado</DropdownMenuItem>
+          <DropdownMenuItem disabled className="text-xs">
+            Nenhum grupo criado
+          </DropdownMenuItem>
         )}
         {groups.map((g) => (
           <DropdownMenuItem key={g.id} onClick={() => move(g.id)} className="gap-2">
@@ -154,7 +165,9 @@ function CompanyActionsMenu({
         <button
           type="button"
           onClick={(e) => e.stopPropagation()}
-          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") e.stopPropagation(); }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") e.stopPropagation();
+          }}
           aria-label={`Ações de ${company.name}`}
           className="inline-flex items-center justify-center size-6 shrink-0 rounded-md hover:bg-accent transition-colors"
         >
@@ -163,20 +176,29 @@ function CompanyActionsMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem
-          onClick={(e) => { e.stopPropagation(); onAddToRoute(company); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onAddToRoute(company);
+          }}
         >
           <RouteIcon className="size-3.5 mr-2" /> Adicionar à rota
         </DropdownMenuItem>
         <MoveToGroupSubmenu company={company} />
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          onClick={(e) => { e.stopPropagation(); onEdit(company); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit(company);
+          }}
         >
           <PencilIcon className="size-3.5 mr-2" /> Editar
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          onClick={(e) => { e.stopPropagation(); onDelete(company); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(company);
+          }}
           className="text-destructive focus:text-destructive"
         >
           <Trash2Icon className="size-3.5 mr-2" /> Excluir
@@ -248,25 +270,22 @@ export function CompanyCard({
           <GroupBadge group={company.group} className="text-xs max-w-full" />
         </div>
       )}
-
-      {company.projectNames.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {company.projectNames.slice(0, 3).map((p) => (
-            <Badge key={p} variant="outline" className="text-xs font-normal truncate max-w-[140px]">{p}</Badge>
-          ))}
-          {company.projectNames.length > 3 && (
-            <Badge variant="outline" className="text-xs font-normal">+{company.projectNames.length - 3}</Badge>
-          )}
-        </div>
-      )}
     </div>
   );
 }
 
 function SortHeader({
-  label, sortKey, current, dir, onSort,
+  label,
+  sortKey,
+  current,
+  dir,
+  onSort,
 }: {
-  label: string; sortKey: SortKey; current: SortKey; dir: SortDir; onSort: (k: SortKey) => void;
+  label: string;
+  sortKey: SortKey;
+  current: SortKey;
+  dir: SortDir;
+  onSort: (k: SortKey) => void;
 }) {
   const active = current === sortKey;
   return (
@@ -277,7 +296,11 @@ function SortHeader({
     >
       {label}
       {active ? (
-        dir === "asc" ? <ChevronUpIcon className="size-3" /> : <ChevronDownIcon className="size-3" />
+        dir === "asc" ? (
+          <ChevronUpIcon className="size-3" />
+        ) : (
+          <ChevronDownIcon className="size-3" />
+        )
       ) : (
         <ChevronsUpDownIcon className="size-3 opacity-40" />
       )}
@@ -286,7 +309,14 @@ function SortHeader({
 }
 
 export function CompanyTable({
-  companies, onCompanyClick, onEdit, onDelete, onAddToRoute, sortKey, sortDir, onSort,
+  companies,
+  onCompanyClick,
+  onEdit,
+  onDelete,
+  onAddToRoute,
+  sortKey,
+  sortDir,
+  onSort,
 }: {
   companies: EnrichedCompany[];
   onCompanyClick: (c: EnrichedCompany) => void;
@@ -313,18 +343,6 @@ export function CompanyTable({
             </th>
             <th className="text-left px-4 py-2.5 hidden sm:table-cell">
               <span className="text-xs font-medium text-muted-foreground">CNPJ</span>
-            </th>
-            <th className="text-right px-4 py-2.5">
-              <SortHeader label="Abertas" sortKey="open" current={sortKey} dir={sortDir} onSort={onSort} />
-            </th>
-            <th className="text-right px-4 py-2.5">
-              <SortHeader label="Urgentes" sortKey="urgent" current={sortKey} dir={sortDir} onSort={onSort} />
-            </th>
-            <th className="text-right px-4 py-2.5">
-              <SortHeader label="Atrasadas" sortKey="overdue" current={sortKey} dir={sortDir} onSort={onSort} />
-            </th>
-            <th className="text-right px-4 py-2.5">
-              <SortHeader label="Encerradas" sortKey="closed" current={sortKey} dir={sortDir} onSort={onSort} />
             </th>
             <th className="text-left px-4 py-2.5 hidden md:table-cell">
               <SortHeader label="Próx. evento" sortKey="nextEvent" current={sortKey} dir={sortDir} onSort={onSort} />
@@ -359,39 +377,13 @@ export function CompanyTable({
                   <QuickStatusMenu company={company} />
                 </td>
                 <td className="px-4 py-3 hidden lg:table-cell">
-                  {company.group
-                    ? <GroupBadge group={company.group} className="text-xs max-w-[160px]" />
-                    : <span className="text-xs text-muted-foreground">—</span>}
+                  {company.group ? (
+                    <GroupBadge group={company.group} className="text-xs max-w-[160px]" />
+                  ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
                 </td>
-                <td className="px-4 py-3 text-xs text-muted-foreground hidden sm:table-cell">
-                  {company.cnpj ?? "—"}
-                </td>
-                <td className="px-4 py-3 text-right tabular-nums">
-                  <span className={
-                    company.openCount > 0
-                      ? company.urgentCount > 0
-                        ? "text-red-600 dark:text-red-500 font-semibold"
-                        : company.overdueCount > 0
-                        ? "text-orange-700 dark:text-orange-500 font-semibold"
-                        : "text-emerald-700 dark:text-emerald-500 font-semibold"
-                      : "text-muted-foreground"
-                  }>
-                    {company.openCount}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-right tabular-nums">
-                  {company.urgentCount > 0
-                    ? <span className="text-red-600 dark:text-red-500 font-semibold">{company.urgentCount}</span>
-                    : <span className="text-muted-foreground">—</span>}
-                </td>
-                <td className="px-4 py-3 text-right tabular-nums">
-                  {company.overdueCount > 0
-                    ? <span className="text-orange-700 dark:text-orange-500 font-semibold">{company.overdueCount}</span>
-                    : <span className="text-muted-foreground">—</span>}
-                </td>
-                <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
-                  {company.closedCount}
-                </td>
+                <td className="px-4 py-3 text-xs text-muted-foreground hidden sm:table-cell">{company.cnpj ?? "—"}</td>
                 <td className="px-4 py-3 hidden md:table-cell">
                   {company.nextEvent ? (
                     <span className="text-xs">
@@ -406,7 +398,12 @@ export function CompanyTable({
                 </td>
                 {/* biome-ignore lint/a11y/useKeyWithClickEvents: só barra o clique de chegar na linha; a interação é do menu dentro. */}
                 <td className="px-2 py-3" onClick={(e) => e.stopPropagation()}>
-                  <CompanyActionsMenu company={company} onEdit={onEdit} onDelete={onDelete} onAddToRoute={onAddToRoute} />
+                  <CompanyActionsMenu
+                    company={company}
+                    onEdit={onEdit}
+                    onDelete={onDelete}
+                    onAddToRoute={onAddToRoute}
+                  />
                 </td>
               </tr>
             );

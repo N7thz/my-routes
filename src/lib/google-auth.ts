@@ -10,10 +10,7 @@ const READ_SCOPES = [
   "https://www.googleapis.com/auth/calendar",
 ];
 // Escopos que permitem CRIAR/editar eventos.
-const WRITE_SCOPES = [
-  "https://www.googleapis.com/auth/calendar.events",
-  "https://www.googleapis.com/auth/calendar",
-];
+const WRITE_SCOPES = ["https://www.googleapis.com/auth/calendar.events", "https://www.googleapis.com/auth/calendar"];
 
 export type GoogleUnavailableReason = "not-connected" | "no-calendar-scope" | "unauthenticated";
 
@@ -21,10 +18,7 @@ type GoogleAccountResult =
   | { accessToken: string; hasCalendarScope: true; canWriteEvents: boolean }
   | { accessToken: null; hasCalendarScope: false; reason: GoogleUnavailableReason };
 
-async function refreshGoogleToken(
-  accountId: string,
-  refreshToken: string
-): Promise<string | null> {
+async function refreshGoogleToken(accountId: string, refreshToken: string): Promise<string | null> {
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -55,11 +49,12 @@ async function refreshGoogleToken(
  * Versão sem sessão: recebe o usuário explicitamente. Usada por jobs que rodam
  * fora de uma requisição autenticada (ex.: cron da Vercel).
  */
-export async function getGoogleCalendarTokenForUser(
-  userId: string
-): Promise<GoogleAccountResult> {
-  const account = await prisma.account.findFirst({
+export async function getGoogleCalendarTokenForUser(userId: string): Promise<GoogleAccountResult> {
+  // O usuário pode ter vários e-mails do Google vinculados. A agenda usada é a
+  // da conta mais antiga com permissão de agenda (em geral a do primeiro login).
+  const accounts = await prisma.account.findMany({
     where: { userId, providerId: "google" },
+    orderBy: { createdAt: "asc" },
     select: {
       id: true,
       accessToken: true,
@@ -68,6 +63,7 @@ export async function getGoogleCalendarTokenForUser(
       scope: true,
     },
   });
+  const account = accounts.find((a) => READ_SCOPES.some((s) => (a.scope ?? "").includes(s))) ?? accounts[0];
 
   if (!account) return { accessToken: null, hasCalendarScope: false, reason: "not-connected" };
 
@@ -78,9 +74,7 @@ export async function getGoogleCalendarTokenForUser(
   }
   const canWriteEvents = WRITE_SCOPES.some((s) => scope.includes(s));
 
-  const isExpired = account.accessTokenExpiresAt
-    ? account.accessTokenExpiresAt < new Date()
-    : false;
+  const isExpired = account.accessTokenExpiresAt ? account.accessTokenExpiresAt < new Date() : false;
 
   if (!isExpired && account.accessToken) {
     return { accessToken: account.accessToken, hasCalendarScope: true, canWriteEvents };

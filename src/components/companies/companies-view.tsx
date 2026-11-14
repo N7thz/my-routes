@@ -10,16 +10,16 @@ import {
   parseAsArrayOf,
   parseAsBoolean,
   debounce,
+  createSerializer,
 } from "nuqs";
 import { cn } from "@/lib/utils";
-import { useCompanies } from "@/hooks/use-companies";
+import { useCompanies, useMoveCompanyToGroup } from "@/hooks/use-companies";
+import { useRememberedFilters } from "@/hooks/use-remembered-filters";
+import { type FilterPreset, SavedFiltersMenu } from "@/components/saved-filters-menu";
 import { useCompanyGroups } from "@/hooks/use-company-groups";
 import { CompanyGroupsDialog, GroupDot } from "@/components/company-groups-dialog";
-import { useRunrunitList } from "@/hooks/use-runrunit-tasks";
 import { useGoogleCalendar } from "@/hooks/use-google-calendar";
-import { RunrunitTaskSheet } from "@/components/runrunit-task-sheet";
 import type { CompanyStatus } from "@/lib/company-service";
-import { type RunrunitTask } from "@/lib/runrunit";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,8 +42,11 @@ import {
 import {
   EnrichedCompany,
   NO_GROUP,
+  PERIOD_KEYS,
+  PERIOD_LABELS,
   PER_PAGE_OPTIONS,
   PerPage,
+  type PeriodKey,
   SORT_DIRS,
   SORT_KEYS,
   STATUS_CONFIG,
@@ -51,55 +54,81 @@ import {
   SortKey,
   VIEW_MODES,
   enrichCompanies,
+  matchesPeriod,
   sortCompanies,
 } from "@/components/companies/company-model";
 import { CompanyFormDialog, DeleteCompanyDialog } from "@/components/companies/company-form-dialogs";
 import { CompanySheet } from "@/components/companies/company-sheet";
 import { AddToRouteDialog } from "@/components/companies/add-to-route-dialog";
 import { CompanyCard, CompanyTable } from "@/components/companies/company-list";
+import { CompanyTransferRoot, TransferCard, TransferGroup } from "@/components/companies/company-transfer";
 
 const subscribeNoop = () => () => {};
+
+/** Preferências lembradas entre visitas (busca e página ficam de fora). */
+const PREF_PARSERS = {
+  view: parseAsStringLiteral(VIEW_MODES).withDefault("cards"),
+  status: parseAsArrayOf(parseAsStringLiteral(STATUS_KEYS)).withDefault([]),
+  sort: parseAsStringLiteral(SORT_KEYS).withDefault("name"),
+  dir: parseAsStringLiteral(SORT_DIRS).withDefault("asc"),
+  perPage: parseAsNumberLiteral(PER_PAGE_OPTIONS).withDefault(12),
+  groups: parseAsArrayOf(parseAsString).withDefault([]),
+  periodo: parseAsStringLiteral(PERIOD_KEYS),
+  groupBy: parseAsBoolean.withDefault(false).withOptions({ clearOnDefault: true }),
+};
+
+/** O que entra num filtro salvo com nome: o que filtra e ordena, não o layout. */
+const SAVED_FILTER_PARSERS = {
+  q: parseAsString.withDefault(""),
+  status: PREF_PARSERS.status,
+  groups: PREF_PARSERS.groups,
+  periodo: PREF_PARSERS.periodo,
+  sort: PREF_PARSERS.sort,
+  dir: PREF_PARSERS.dir,
+};
+
+const serializeSavedFilter = createSerializer(SAVED_FILTER_PARSERS);
+
+function preset(id: string, name: string, values: { status?: CompanyStatus[]; periodo?: PeriodKey }): FilterPreset {
+  return { id, name, query: serializeSavedFilter(values) };
+}
+
+/** Atalhos fixos do menu de filtros (combinações de status e período). */
+const FILTER_PRESETS: FilterPreset[] = [
+  preset("pendentes", "Pendentes", { status: ["PENDENTE"] }),
+  preset("andamento", "Em andamento", { status: ["EM_ANDAMENTO"] }),
+  preset("revisao", "Para revisar", { status: ["REVISAO"] }),
+  preset("hoje", "Agendadas para hoje", { periodo: "hoje" }),
+  preset("semana", "Agendadas esta semana", { periodo: "semana" }),
+  preset("feitas-semana", "Feitas esta semana", { status: ["CONCLUIDO"], periodo: "semana" }),
+  preset("feitas-mes", "Feitas este mês", { status: ["CONCLUIDO"], periodo: "mes" }),
+  preset("atrasadas", "Atrasadas (não concluídas)", {
+    status: ["PENDENTE", "EM_ANDAMENTO", "REVISAO"],
+    periodo: "atrasadas",
+  }),
+];
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function CompaniesView() {
   // Todos os filtros vivem na URL (nuqs). O estado retornado atualiza na hora;
   // só a escrita na URL da busca é adiada via debounce para não poluir o histórico.
-  const [viewMode, setViewMode] = useQueryState(
-    "view",
-    parseAsStringLiteral(VIEW_MODES).withDefault("cards")
-  );
+  useRememberedFilters("empresas", PREF_PARSERS);
+  const [viewMode, setViewMode] = useQueryState("view", PREF_PARSERS.view);
   const [search, setSearch] = useQueryState(
     "q",
     parseAsString.withDefault("").withOptions({
       limitUrlUpdates: debounce(300),
       clearOnDefault: true,
-    })
+    }),
   );
-  const [statusFilter, setStatusFilter] = useQueryState(
-    "status",
-    parseAsArrayOf(parseAsStringLiteral(STATUS_KEYS)).withDefault([])
-  );
-  const [sortKey, setSortKey] = useQueryState(
-    "sort",
-    parseAsStringLiteral(SORT_KEYS).withDefault("name")
-  );
-  const [sortDir, setSortDir] = useQueryState(
-    "dir",
-    parseAsStringLiteral(SORT_DIRS).withDefault("asc")
-  );
+  const [statusFilter, setStatusFilter] = useQueryState("status", PREF_PARSERS.status);
+  const [sortKey, setSortKey] = useQueryState("sort", PREF_PARSERS.sort);
+  const [sortDir, setSortDir] = useQueryState("dir", PREF_PARSERS.dir);
   const [page, setPage] = useQueryState("page", parseAsInteger.withDefault(1));
-  const [perPage, setPerPage] = useQueryState(
-    "perPage",
-    parseAsNumberLiteral(PER_PAGE_OPTIONS).withDefault(12)
-  );
-  const [groupFilter, setGroupFilter] = useQueryState(
-    "groups",
-    parseAsArrayOf(parseAsString).withDefault([])
-  );
-  const [groupBy, setGroupBy] = useQueryState(
-    "groupBy",
-    parseAsBoolean.withDefault(false).withOptions({ clearOnDefault: true })
-  );
+  const [perPage, setPerPage] = useQueryState("perPage", PREF_PARSERS.perPage);
+  const [groupFilter, setGroupFilter] = useQueryState("groups", PREF_PARSERS.groups);
+  const [groupBy, setGroupBy] = useQueryState("groupBy", PREF_PARSERS.groupBy);
+  const [periodFilter, setPeriodFilter] = useQueryState("periodo", PREF_PARSERS.periodo);
   const [managingGroups, setManagingGroups] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
   const [creatingCompany, setCreatingCompany] = useState(false);
@@ -107,7 +136,6 @@ export function CompaniesView() {
   const [editingCompany, setEditingCompany] = useState<EnrichedCompany | null>(null);
   const [deletingCompany, setDeletingCompany] = useState<EnrichedCompany | null>(null);
   const [addingToRoute, setAddingToRoute] = useState<EnrichedCompany | null>(null);
-  const [selectedTask, setSelectedTask] = useState<RunrunitTask | null>(null);
 
   // Janela fixada na montagem: se mudasse a cada render, a chave da query mudaria junto.
   const [calendarRange] = useState(() => {
@@ -119,7 +147,6 @@ export function CompaniesView() {
   });
 
   const { data: companiesData, isLoading: companiesLoading } = useCompanies();
-  const { data: tasksData, isLoading: tasksLoading } = useRunrunitList();
   const { data: calendarData, isLoading: calendarLoading } = useGoogleCalendar(calendarRange);
   const { data: groupsData, isLoading: groupsLoading } = useCompanyGroups();
   const groups = groupsData ?? [];
@@ -127,23 +154,24 @@ export function CompaniesView() {
   // O servidor nunca tem dados, mas o client pode já ter restaurado o cache do
   // localStorage quando o <Suspense> hidrata. Mantém o skeleton até hidratar
   // para o primeiro render do client bater com o HTML do servidor.
-  const hydrated = useSyncExternalStore(subscribeNoop, () => true, () => false);
+  const hydrated = useSyncExternalStore(
+    subscribeNoop,
+    () => true,
+    () => false,
+  );
 
-  const isLoading = !hydrated || companiesLoading || tasksLoading || calendarLoading || groupsLoading;
+  const isLoading = !hydrated || companiesLoading || calendarLoading || groupsLoading;
 
   const enriched = useMemo(() => {
     const companies = companiesData ?? [];
-    const tasks = Array.isArray(tasksData) ? tasksData : [];
     const events = Array.isArray(calendarData) ? calendarData : [];
-    return enrichCompanies(companies, tasks, events, groupsData ?? []);
-  }, [companiesData, tasksData, calendarData, groupsData]);
+    return enrichCompanies(companies, events, groupsData ?? []);
+  }, [companiesData, calendarData, groupsData]);
 
   function toggleStatusFilter(key: CompanyStatus) {
     setStatusFilter((prev) => {
       const arr = prev ?? [];
-      const next = arr.includes(key)
-        ? arr.filter((k) => k !== key)
-        : [...arr, key];
+      const next = arr.includes(key) ? arr.filter((k) => k !== key) : [...arr, key];
       return next.length > 0 ? next : null;
     });
     setPage(1);
@@ -167,20 +195,22 @@ export function CompaniesView() {
     });
   }
 
+  function togglePeriodFilter(key: PeriodKey) {
+    setPeriodFilter((prev) => (prev === key ? null : key));
+    setPage(1);
+  }
+
   function clearFilters() {
     setStatusFilter(null);
     setGroupFilter(null);
+    setPeriodFilter(null);
   }
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     let list = q
       ? enriched.filter(
-          (c) =>
-            c.name.toLowerCase().includes(q) ||
-            c.cnpj?.includes(q) ||
-            c.group?.name.toLowerCase().includes(q) ||
-            c.projectNames.some((p) => p.toLowerCase().includes(q))
+          (c) => c.name.toLowerCase().includes(q) || c.cnpj?.includes(q) || c.group?.name.toLowerCase().includes(q),
         )
       : enriched;
     if (statusFilter.length > 0) {
@@ -189,8 +219,11 @@ export function CompaniesView() {
     if (groupFilter.length > 0) {
       list = list.filter((c) => groupFilter.includes(c.groupId ?? NO_GROUP));
     }
+    if (periodFilter) {
+      list = list.filter((c) => matchesPeriod(c.date, periodFilter));
+    }
     return sortCompanies(list, sortKey, sortDir);
-  }, [enriched, search, statusFilter, groupFilter, sortKey, sortDir]);
+  }, [enriched, search, statusFilter, groupFilter, periodFilter, sortKey, sortDir]);
 
   // Agrupado: mostra todas as empresas filtradas em seções (sem paginação),
   // na ordem alfabética dos grupos e com "Sem grupo" por último.
@@ -208,10 +241,19 @@ export function CompaniesView() {
           color: null,
           items: filtered.filter((c) => !c.group),
         },
-      ].filter((s) => s.items.length > 0)
+        // Grupos vazios continuam na tela (para receber cartões arrastados),
+        // menos quando a busca ou o filtro de status escondem empresas.
+      ].filter(
+        (s) => s.items.length > 0 || (!search && statusFilter.length === 0 && !periodFilter && s.key !== NO_GROUP),
+      )
     : [];
 
-  const hasFilters = statusFilter.length > 0 || groupFilter.length > 0;
+  const moveToGroup = useMoveCompanyToGroup();
+  const canDrag = groupBy && viewMode === "cards";
+  const companiesById = new Map(filtered.map((c) => [c.id, c]));
+  const transferLists = Object.fromEntries(sections.map((s) => [s.key, s.items.map((c) => c.id)]));
+
+  const hasFilters = statusFilter.length > 0 || groupFilter.length > 0 || !!periodFilter;
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
   const safePage = Math.min(Math.max(1, page), totalPages);
@@ -219,7 +261,10 @@ export function CompaniesView() {
 
   function handleSort(key: SortKey) {
     if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    else { setSortKey(key); setSortDir(key === "name" ? "asc" : "desc"); }
+    else {
+      setSortKey(key);
+      setSortDir(key === "name" ? "asc" : "desc");
+    }
   }
 
   if (isLoading) {
@@ -245,12 +290,7 @@ export function CompaniesView() {
         onClose={() => setManagingGroups(false)}
         companies={companiesData ?? []}
       />
-      <RunrunitTaskSheet task={selectedTask} onClose={() => setSelectedTask(null)} />
-      <CompanyFormDialog
-        mode="create"
-        open={creatingCompany}
-        onClose={() => setCreatingCompany(false)}
-      />
+      <CompanyFormDialog mode="create" open={creatingCompany} onClose={() => setCreatingCompany(false)} />
       <CompanyFormDialog
         mode="edit"
         open={!!editingCompany}
@@ -264,20 +304,20 @@ export function CompaniesView() {
           setSelectedCompany(null);
         }}
       />
-      <AddToRouteDialog
-        key={addingToRoute?.id}
-        company={addingToRoute}
-        onClose={() => setAddingToRoute(null)}
-      />
+      <AddToRouteDialog key={addingToRoute?.id} company={addingToRoute} onClose={() => setAddingToRoute(null)} />
       <CompanySheet
         company={selectedCompany}
         onClose={() => setSelectedCompany(null)}
-        onEdit={(c) => { setSelectedCompany(null); setEditingCompany(c); }}
-        onDelete={(c) => { setDeletingCompany(c); }}
-        onAddToRoute={(c) => { setSelectedCompany(null); setAddingToRoute(c); }}
-        onTaskClick={(task) => {
+        onEdit={(c) => {
           setSelectedCompany(null);
-          setSelectedTask(task);
+          setEditingCompany(c);
+        }}
+        onDelete={(c) => {
+          setDeletingCompany(c);
+        }}
+        onAddToRoute={(c) => {
+          setSelectedCompany(null);
+          setAddingToRoute(c);
         }}
       />
 
@@ -288,7 +328,10 @@ export function CompaniesView() {
             <Input
               placeholder="Buscar empresa, CNPJ ou projeto…"
               value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
               className="pl-8"
             />
           </div>
@@ -296,6 +339,12 @@ export function CompaniesView() {
             {filtered.length} empresa{filtered.length !== 1 ? "s" : ""}
           </span>
           <div className="flex items-center gap-2 ml-auto">
+            <SavedFiltersMenu
+              screen="empresas"
+              parsers={SAVED_FILTER_PARSERS}
+              presets={FILTER_PRESETS}
+              onApply={() => setPage(1)}
+            />
             <Button size="sm" variant="outline" onClick={() => setManagingGroups(true)}>
               <FoldersIcon className="size-4 mr-1.5" />
               Grupos
@@ -316,14 +365,19 @@ export function CompaniesView() {
             <Select
               value={String(perPage)}
               disabled={groupBy}
-              onValueChange={(v) => { setPerPage(Number(v) as PerPage); setPage(1); }}
+              onValueChange={(v) => {
+                setPerPage(Number(v) as PerPage);
+                setPage(1);
+              }}
             >
-              <SelectTrigger className="h-8 w-24 text-xs">
+              <SelectTrigger aria-label="Empresas por página" className="h-8 w-24 text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {PER_PAGE_OPTIONS.map((n) => (
-                  <SelectItem key={n} value={String(n)}>{n} / pág.</SelectItem>
+                  <SelectItem key={n} value={String(n)}>
+                    {n} / pág.
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -351,15 +405,35 @@ export function CompaniesView() {
         </div>
 
         <div className="flex items-center gap-1.5 flex-wrap">
-          {(Object.entries(STATUS_CONFIG) as [CompanyStatus, typeof STATUS_CONFIG[CompanyStatus]][]).map(([key, cfg]) => {
-            const active = statusFilter.includes(key);
+          {(Object.entries(STATUS_CONFIG) as [CompanyStatus, (typeof STATUS_CONFIG)[CompanyStatus]][]).map(
+            ([key, cfg]) => {
+              const active = statusFilter.includes(key);
+              return (
+                <button type="button" key={key} onClick={() => toggleStatusFilter(key)}>
+                  <Badge
+                    variant={active ? cfg.variant : "outline"}
+                    className={cn(
+                      "cursor-pointer transition-opacity",
+                      active && cfg.className,
+                      !active && "opacity-50 hover:opacity-80",
+                    )}
+                  >
+                    {cfg.label}
+                  </Badge>
+                </button>
+              );
+            },
+          )}
+          <Separator orientation="vertical" className="h-4 mx-1" />
+          {PERIOD_KEYS.map((key) => {
+            const active = periodFilter === key;
             return (
-              <button type="button" key={key} onClick={() => toggleStatusFilter(key)}>
+              <button type="button" key={key} onClick={() => togglePeriodFilter(key)} aria-pressed={active}>
                 <Badge
-                  variant={active ? cfg.variant : "outline"}
-                  className={cn("cursor-pointer transition-opacity", active && cfg.className, !active && "opacity-50 hover:opacity-80")}
+                  variant={active ? "secondary" : "outline"}
+                  className={cn("cursor-pointer transition-opacity", !active && "opacity-50 hover:opacity-80")}
                 >
-                  {cfg.label}
+                  {PERIOD_LABELS[key]}
                 </Badge>
               </button>
             );
@@ -373,7 +447,10 @@ export function CompaniesView() {
                   <button type="button" key={g.id} onClick={() => toggleGroupFilter(g.id)}>
                     <Badge
                       variant={active ? "secondary" : "outline"}
-                      className={cn("cursor-pointer gap-1.5 transition-opacity", !active && "opacity-50 hover:opacity-80")}
+                      className={cn(
+                        "cursor-pointer gap-1.5 transition-opacity",
+                        !active && "opacity-50 hover:opacity-80",
+                      )}
                     >
                       {g.id !== NO_GROUP && <GroupDot color={g.color} />}
                       {g.name}
@@ -406,70 +483,97 @@ export function CompaniesView() {
               {search && hasFilters
                 ? `Nenhuma empresa para "${search}" com os filtros selecionados`
                 : search
-                ? `Nenhuma empresa encontrada para "${search}"`
-                : "Nenhuma empresa com os filtros selecionados"}
+                  ? `Nenhuma empresa encontrada para "${search}"`
+                  : "Nenhuma empresa com os filtros selecionados"}
             </p>
             {hasFilters && (
-              <button
-                type="button"
-                onClick={clearFilters}
-                className="text-xs text-primary hover:underline"
-              >
+              <button type="button" onClick={clearFilters} className="text-xs text-primary hover:underline">
                 Limpar filtros
               </button>
             )}
           </div>
         ) : groupBy ? (
-          <div className="flex flex-col gap-6">
-            {sections.map((section) => {
-              const collapsed = collapsedGroups.has(section.key);
-              return (
-                <section key={section.key} className="flex flex-col gap-3">
-                  <button
-                    type="button"
-                    onClick={() => toggleCollapsed(section.key)}
-                    className="flex items-center gap-2 text-left group w-fit"
-                  >
-                    {collapsed
-                      ? <ChevronRightIcon className="size-4 text-muted-foreground" />
-                      : <ChevronDownIcon className="size-4 text-muted-foreground" />}
-                    {section.key === NO_GROUP
-                      ? <span className="size-2.5 rounded-full border border-dashed border-muted-foreground shrink-0" />
-                      : <GroupDot color={section.color} className="size-2.5" />}
-                    <span className="text-sm font-semibold group-hover:underline">{section.label}</span>
-                    <span className="text-xs text-muted-foreground tabular-nums">{section.items.length}</span>
-                  </button>
-                  {!collapsed && (viewMode === "cards" ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                      {section.items.map((company) => (
-                        <CompanyCard
-                          key={company.id}
-                          company={company}
-                          onClick={() => setSelectedCompany(company)}
-                          onEdit={setEditingCompany}
-                          onDelete={setDeletingCompany}
-                          onAddToRoute={setAddingToRoute}
-                        />
-                      ))}
-                    </div>
-                  ) : (
-                    <Card className="overflow-hidden">
-                      <CompanyTable
-                        companies={section.items}
-                        onCompanyClick={setSelectedCompany}
-                        onEdit={setEditingCompany}
-                        onDelete={setDeletingCompany}
-                        onAddToRoute={setAddingToRoute}
-                        sortKey={sortKey}
-                        sortDir={sortDir}
-                        onSort={handleSort}
-                      />
-                    </Card>
-                  ))}
-                </section>
-              );
-            })}
-          </div>
+          <CompanyTransferRoot
+            lists={transferLists}
+            companyLabel={(id) => filtered.find((c) => c.id === id)?.name}
+            groupLabel={(id) => sections.find((s) => s.key === id)?.label}
+            onMove={(id, groupId) => moveToGroup.mutate({ id, groupId })}
+            className="flex flex-col gap-6"
+          >
+            {({ lists }) => (
+              <>
+                {canDrag && (
+                  <p className="-mb-2 text-xs text-muted-foreground">
+                    Arraste a alça do cartão para outro grupo para mudar o grupo da empresa. Pelo teclado: foque a alça,
+                    espaço para pegar, setas para mover e espaço para soltar.
+                  </p>
+                )}
+                {moveToGroup.isError && <p className="-mb-2 text-xs text-destructive">{moveToGroup.error.message}</p>}
+                {sections.map((section) => {
+                  const collapsed = collapsedGroups.has(section.key);
+                  return (
+                    <TransferGroup key={section.key} value={section.key} className="flex flex-col gap-3">
+                      <button
+                        type="button"
+                        onClick={() => toggleCollapsed(section.key)}
+                        className="flex items-center gap-2 text-left group w-fit"
+                      >
+                        {collapsed ? (
+                          <ChevronRightIcon className="size-4 text-muted-foreground" />
+                        ) : (
+                          <ChevronDownIcon className="size-4 text-muted-foreground" />
+                        )}
+                        {section.key === NO_GROUP ? (
+                          <span className="size-2.5 rounded-full border border-dashed border-muted-foreground shrink-0" />
+                        ) : (
+                          <GroupDot color={section.color} className="size-2.5" />
+                        )}
+                        <span className="text-sm font-semibold group-hover:underline">{section.label}</span>
+                        <span className="text-xs text-muted-foreground tabular-nums">{section.items.length}</span>
+                      </button>
+                      {!collapsed &&
+                        (viewMode === "cards" ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                            {(lists[section.key] ?? section.items.map((c) => c.id))
+                              .map((id) => companiesById.get(id))
+                              .filter((c) => c !== undefined)
+                              .map((company) => (
+                                <TransferCard key={company.id} value={company.id} label={company.name}>
+                                  <CompanyCard
+                                    company={company}
+                                    onClick={() => setSelectedCompany(company)}
+                                    onEdit={setEditingCompany}
+                                    onDelete={setDeletingCompany}
+                                    onAddToRoute={setAddingToRoute}
+                                  />
+                                </TransferCard>
+                              ))}
+                            {(lists[section.key]?.length ?? section.items.length) === 0 && (
+                              <div className="col-span-full rounded-lg border border-dashed p-6 text-center text-xs text-muted-foreground">
+                                Nenhuma empresa. Arraste um cartão para cá.
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <Card className="overflow-hidden">
+                            <CompanyTable
+                              companies={section.items}
+                              onCompanyClick={setSelectedCompany}
+                              onEdit={setEditingCompany}
+                              onDelete={setDeletingCompany}
+                              onAddToRoute={setAddingToRoute}
+                              sortKey={sortKey}
+                              sortDir={sortDir}
+                              onSort={handleSort}
+                            />
+                          </Card>
+                        ))}
+                    </TransferGroup>
+                  );
+                })}
+              </>
+            )}
+          </CompanyTransferRoot>
         ) : viewMode === "cards" ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {paginated.map((company) => (

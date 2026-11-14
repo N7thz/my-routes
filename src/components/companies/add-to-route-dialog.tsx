@@ -12,13 +12,7 @@ import { Label } from "@/components/ui/label";
 import { BuildingIcon, PlusIcon, MapPinIcon, CheckIcon } from "lucide-react";
 import { EnrichedCompany } from "@/components/companies/company-model";
 
-export function AddToRouteDialog({
-  company,
-  onClose,
-}: {
-  company: EnrichedCompany | null;
-  onClose: () => void;
-}) {
+export function AddToRouteDialog({ company, onClose }: { company: EnrichedCompany | null; onClose: () => void }) {
   const { data: routes = [], isLoading: routesLoading } = useRoutes();
   const createRoute = useCreateRoute();
   const addStop = useAddStop();
@@ -32,7 +26,10 @@ export function AddToRouteDialog({
     const futureRoutes: RouteRecord[] = [];
     const undatedRoutes: RouteRecord[] = [];
     for (const r of routes) {
-      if (!r.date) { undatedRoutes.push(r); continue; }
+      if (!r.date) {
+        undatedRoutes.push(r);
+        continue;
+      }
       const iso = new Date(r.date).toISOString().slice(0, 10);
       if (iso === todayIso) todayRoutes.push(r);
       else if (iso > todayIso) futureRoutes.push(r);
@@ -85,7 +82,7 @@ export function AddToRouteDialog({
         className={cn(
           "w-full text-left px-3 py-2.5 rounded-md border transition-colors flex items-center justify-between gap-2",
           selected ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50",
-          inRoute && "opacity-50 cursor-not-allowed"
+          inRoute && "opacity-50 cursor-not-allowed",
         )}
       >
         <div className="flex flex-col gap-0.5 min-w-0">
@@ -95,7 +92,7 @@ export function AddToRouteDialog({
             {dateLabel && ` · ${dateLabel}`}
           </span>
         </div>
-        {inRoute && <CheckIcon className="size-4 text-emerald-500 shrink-0" />}
+        {inRoute && <CheckIcon className="size-4 text-emerald-600 dark:text-emerald-500 shrink-0" />}
       </button>
     );
   }
@@ -119,8 +116,10 @@ export function AddToRouteDialog({
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <MapPinIcon className="size-3.5 text-amber-500 shrink-0" />
-              <span className="text-xs text-amber-600 dark:text-amber-400">Sem endereço — será adicionada sem localização</span>
+              <MapPinIcon className="size-3.5 text-amber-600 dark:text-amber-500 shrink-0" />
+              <span className="text-xs text-amber-700 dark:text-amber-400">
+                Sem endereço — será adicionada sem localização
+              </span>
             </div>
           )}
         </div>
@@ -164,7 +163,7 @@ export function AddToRouteDialog({
             onClick={() => setSelectedId("new")}
             className={cn(
               "w-full text-left px-3 py-2.5 rounded-md border border-dashed transition-colors",
-              selectedId === "new" ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"
+              selectedId === "new" ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50",
             )}
           >
             <div className="flex items-center gap-2 text-sm text-muted-foreground">

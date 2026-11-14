@@ -42,7 +42,7 @@ function GroupSelect({ value, onChange }: { value: string; onChange: (v: string)
     <div className="flex flex-col gap-1.5">
       <Label>Grupo</Label>
       <Select value={value || NO_GROUP} onValueChange={(v) => onChange(v === NO_GROUP ? "" : v)}>
-        <SelectTrigger>
+        <SelectTrigger aria-label="Grupo">
           <SelectValue placeholder="Sem grupo" />
         </SelectTrigger>
         <SelectContent>
@@ -206,7 +206,7 @@ function CompanyFormFields({
         <div className="flex flex-col gap-1.5 flex-1">
           <Label>Status</Label>
           <Select value={form.status} onValueChange={(v) => set("status", v as CompanyStatus)}>
-            <SelectTrigger>
+            <SelectTrigger aria-label="Status">
               <SelectValue placeholder="Sem status" />
             </SelectTrigger>
             <SelectContent>
@@ -279,13 +279,7 @@ export function CompanyFormDialog({
   );
 }
 
-export function DeleteCompanyDialog({
-  company,
-  onClose,
-}: {
-  company: EnrichedCompany | null;
-  onClose: () => void;
-}) {
+export function DeleteCompanyDialog({ company, onClose }: { company: EnrichedCompany | null; onClose: () => void }) {
   const del = useDeleteCompany();
 
   async function handleDelete() {
