@@ -1,5 +1,4 @@
 @import "tailwindcss";
-@import "leaflet/dist/leaflet.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -8,60 +7,67 @@
   100% { transform: scale(2.6); opacity: 0; }
 }
 
+/* Tema Web3 EOS Hero (ver DESIGN.md): preto e branco, sem cor de destaque. */
 @layer base {
   :root {
-    --background: oklch(0.97 0.005 270);
-    --foreground: oklch(0.15 0.03 270);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.15 0.03 270);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.15 0.03 270);
-    --primary: oklch(0.52 0.22 285);
-    --primary-foreground: oklch(0.98 0 0);
-    --secondary: oklch(0.93 0.02 270);
-    --secondary-foreground: oklch(0.20 0.04 270);
-    --muted: oklch(0.94 0.015 270);
-    --muted-foreground: oklch(0.50 0.05 270);
-    --accent: oklch(0.92 0.03 275);
-    --accent-foreground: oklch(0.20 0.04 270);
+    --background: #ffffff;
+    --foreground: #000000;
+    --card: #ffffff;
+    --card-foreground: #000000;
+    --popover: #ffffff;
+    --popover-foreground: #000000;
+    --primary: #000000;
+    --primary-foreground: #ffffff;
+    --secondary: oklch(0.955 0 0);
+    --secondary-foreground: #000000;
+    --muted: oklch(0.965 0 0);
+    --muted-foreground: rgb(0 0 0 / 0.6);
+    --accent: oklch(0.94 0 0);
+    --accent-foreground: #000000;
     --destructive: oklch(0.577 0.245 27.325);
     --destructive-foreground: oklch(0.985 0 0);
-    --border: oklch(0.88 0.02 270);
-    --input: oklch(0.88 0.02 270);
-    --ring: oklch(0.52 0.22 285);
-    --radius: 0.625rem;
-    --chart-1: oklch(0.56 0.22 285);
-    --chart-2: oklch(0.70 0.18 330);
-    --chart-3: oklch(0.65 0.18 200);
-    --chart-4: oklch(0.75 0.15 60);
-    --chart-5: oklch(0.60 0.20 150);
+    --border: rgb(0 0 0 / 0.1);
+    --input: rgb(0 0 0 / 0.45);
+    --ring: #000000;
+    --radius: 1.25rem;
+    --chart-1: oklch(0.2 0 0);
+    --chart-2: oklch(0.45 0 0);
+    --chart-3: oklch(0.6 0 0);
+    --chart-4: oklch(0.75 0 0);
+    --chart-5: oklch(0.85 0 0);
+    --atmo-glow: rgb(0 0 0 / 0.04);
+    --atmo-line: rgb(0 0 0 / 0.035);
+    --scroll-thumb: rgb(0 0 0 / 0.2);
   }
 
   .dark {
-    --background: oklch(0.13 0.03 270);
-    --foreground: oklch(0.94 0.01 270);
-    --card: oklch(0.18 0.04 272);
-    --card-foreground: oklch(0.94 0.01 270);
-    --popover: oklch(0.18 0.04 272);
-    --popover-foreground: oklch(0.94 0.01 270);
-    --primary: oklch(0.58 0.22 285);
-    --primary-foreground: oklch(0.98 0 0);
-    --secondary: oklch(0.24 0.06 275);
-    --secondary-foreground: oklch(0.94 0.01 270);
-    --muted: oklch(0.22 0.045 273);
-    --muted-foreground: oklch(0.63 0.05 272);
-    --accent: oklch(0.28 0.07 278);
-    --accent-foreground: oklch(0.94 0.01 270);
+    --background: #000000;
+    --foreground: #ffffff;
+    --card: oklch(0.145 0 0);
+    --card-foreground: #ffffff;
+    --popover: oklch(0.17 0 0);
+    --popover-foreground: #ffffff;
+    --primary: #ffffff;
+    --primary-foreground: #000000;
+    --secondary: oklch(0.22 0 0);
+    --secondary-foreground: #ffffff;
+    --muted: oklch(0.2 0 0);
+    --muted-foreground: rgb(255 255 255 / 0.6);
+    --accent: oklch(0.24 0 0);
+    --accent-foreground: #ffffff;
     --destructive: oklch(0.65 0.22 15);
-    --destructive-foreground: oklch(0.98 0 0);
-    --border: oklch(0.26 0.06 274);
-    --input: oklch(0.26 0.06 274);
-    --ring: oklch(0.58 0.22 285);
-    --chart-1: oklch(0.58 0.22 285);
-    --chart-2: oklch(0.72 0.18 330);
-    --chart-3: oklch(0.65 0.18 200);
-    --chart-4: oklch(0.75 0.15 60);
-    --chart-5: oklch(0.60 0.20 150);
+    --destructive-foreground: #000000;
+    --border: rgb(255 255 255 / 0.1);
+    --input: rgb(255 255 255 / 0.45);
+    --ring: #ffffff;
+    --chart-1: oklch(1 0 0);
+    --chart-2: oklch(0.8 0 0);
+    --chart-3: oklch(0.65 0 0);
+    --chart-4: oklch(0.5 0 0);
+    --chart-5: oklch(0.38 0 0);
+    --atmo-glow: rgb(255 255 255 / 0.1);
+    --atmo-line: rgb(255 255 255 / 0.045);
+    --scroll-thumb: rgb(255 255 255 / 0.2);
   }
 }
 
@@ -94,8 +100,8 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-general-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -118,49 +124,113 @@
 
 /* Sidebar — light */
 :root {
-  --sidebar: oklch(0.95 0.015 270);
-  --sidebar-foreground: oklch(0.25 0.05 270);
-  --sidebar-primary: oklch(0.52 0.22 285);
-  --sidebar-primary-foreground: oklch(0.98 0 0);
-  --sidebar-accent: oklch(0.90 0.03 275);
-  --sidebar-accent-foreground: oklch(0.20 0.04 270);
-  --sidebar-border: oklch(0.86 0.025 270);
-  --sidebar-ring: oklch(0.52 0.22 285);
+  --sidebar: oklch(0.975 0 0);
+  --sidebar-foreground: rgb(0 0 0 / 0.7);
+  --sidebar-primary: #000000;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: oklch(0.93 0 0);
+  --sidebar-accent-foreground: #000000;
+  --sidebar-border: rgb(0 0 0 / 0.1);
+  --sidebar-ring: #000000;
 }
 
-/* Sidebar — dark (matches the reference image) */
+/* Sidebar — dark */
 .dark {
-  --sidebar: oklch(0.16 0.04 270);
-  --sidebar-foreground: oklch(0.80 0.03 272);
-  --sidebar-primary: oklch(0.58 0.22 285);
-  --sidebar-primary-foreground: oklch(0.98 0 0);
-  --sidebar-accent: oklch(0.23 0.06 275);
-  --sidebar-accent-foreground: oklch(0.94 0.01 270);
-  --sidebar-border: oklch(0.23 0.05 274);
-  --sidebar-ring: oklch(0.58 0.22 285);
+  --sidebar: oklch(0.12 0 0);
+  --sidebar-foreground: rgb(255 255 255 / 0.7);
+  --sidebar-primary: #ffffff;
+  --sidebar-primary-foreground: #000000;
+  --sidebar-accent: oklch(0.22 0 0);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgb(255 255 255 / 0.1);
+  --sidebar-ring: #ffffff;
 }
 
-/* Runrunit comment HTML content */
-.rr-comment p { margin: 0; }
-.rr-comment p + p { margin-top: 0.375rem; }
-.rr-comment strong { font-weight: 600; }
-.rr-comment em { font-style: italic; }
-.rr-comment u { text-decoration: underline; }
-.rr-comment s { text-decoration: line-through; }
-.rr-comment ul, .rr-comment ol { padding-left: 1.25rem; margin: 0.25rem 0; }
-.rr-comment ul { list-style-type: disc; }
-.rr-comment ol { list-style-type: decimal; }
-.rr-comment li { margin: 0.125rem 0; }
-.rr-comment a { color: var(--primary); text-decoration: underline; }
-.rr-comment blockquote { border-left: 2px solid var(--border); padding-left: 0.5rem; color: var(--muted-foreground); }
-.rr-comment pre, .rr-comment code { font-family: monospace; font-size: 0.8125rem; background: var(--muted); padding: 0.125rem 0.25rem; border-radius: 3px; }
-.rr-comment br { display: none; }
-.rr-comment p:empty { display: none; }
+/* Atmosfera do hero atrás do app: duas manchas de luz e uma grade fina, nos tons 0.1 e 0.2 da paleta. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(60vmax circle at 0% 0%, var(--atmo-glow), transparent 62%),
+    radial-gradient(50vmax circle at 100% 100%, var(--atmo-glow), transparent 62%),
+    linear-gradient(var(--atmo-line) 1px, transparent 1px) 0 0 / 40px 40px,
+    linear-gradient(90deg, var(--atmo-line) 1px, transparent 1px) 0 0 / 40px 40px;
+}
 
-/* Runrunit closed task events */
-.fc-wrapper .rr-event-closed {
-  opacity: 0.45;
-  text-decoration: line-through;
+::selection {
+  background: var(--foreground);
+  color: var(--background);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) transparent;
+}
+
+/* Hero (login): headline com preenchimento em gradiente diagonal. */
+.text-gradient-hero {
+  background-image: linear-gradient(144.5deg, var(--foreground) 28%, transparent 115%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Botão pill em camadas: borda externa fina, pill interno e risco de luz no topo. */
+.pill-layered {
+  position: relative;
+  display: inline-flex;
+  border-radius: 9999px;
+  border: 0.6px solid rgb(255 255 255 / 0.9);
+  padding: 3px;
+  transition: transform 200ms ease-out, opacity 200ms ease-out;
+}
+.pill-layered::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 50%;
+  width: 55%;
+  height: 2px;
+  transform: translateX(-50%);
+  border-radius: 9999px;
+  background: linear-gradient(90deg, transparent, #ffffff, transparent);
+  filter: blur(1px);
+  pointer-events: none;
+}
+.pill-layered:has(:disabled) { opacity: 0.5; }
+@media (prefers-reduced-motion: no-preference) {
+  .pill-layered:hover:not(:has(:disabled)) { transform: scale(1.03); }
+  .pill-layered:active:not(:has(:disabled)) { transform: translateY(1px); }
+}
+
+/* Entrada: fade + sobe 16px em 540ms; --i escalona 120ms por item. */
+@keyframes heroEnter {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes heroDrift {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(6%, -8%, 0) scale(1.15); }
+  100% { transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes heroBlink {
+  0%, 100% { opacity: 0.25; }
+  50%      { opacity: 1; }
+}
+@keyframes shimmer {
+  100% { transform: translateX(100%); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hero-enter {
+    opacity: 0;
+    animation: heroEnter 540ms ease-out forwards;
+    animation-delay: calc(var(--i, 0) * 120ms);
+  }
+  .hero-drift { animation: heroDrift 22s ease-in-out infinite; }
+  .hero-blink { animation: heroBlink 3.6s ease-in-out infinite; animation-delay: calc(var(--i, 0) * 450ms); }
 }
 
 /* FullCalendar — design system integration */
@@ -181,14 +251,14 @@
   --fc-button-active-bg-color: var(--primary);
   --fc-button-active-border-color: var(--primary);
   --fc-button-active-text-color: var(--primary-foreground);
-  --fc-today-bg-color: oklch(0.72 0.18 330 / 12%);
+  --fc-today-bg-color: color-mix(in oklch, var(--foreground) 8%, transparent);
   --fc-event-bg-color: var(--primary);
   --fc-event-border-color: var(--primary);
   --fc-event-text-color: var(--primary-foreground);
   --fc-event-selected-overlay-color: color-mix(in oklch, black 20%, transparent);
   --fc-non-business-color: color-mix(in oklch, var(--muted) 40%, transparent);
   --fc-highlight-color: color-mix(in oklch, var(--primary) 12%, transparent);
-  --fc-now-indicator-color: oklch(0.72 0.18 330);
+  --fc-now-indicator-color: var(--foreground);
   --fc-page-bg-color: transparent;
   --fc-neutral-bg-color: var(--muted);
   --fc-list-event-hover-bg-color: var(--accent);
@@ -209,8 +279,8 @@
 .fc-wrapper .fc-button {
   font-size: 0.8125rem;
   font-weight: 500;
-  padding: 0.375rem 0.75rem;
-  border-radius: calc(var(--radius) - 2px);
+  padding: 0.375rem 0.875rem;
+  border-radius: 9999px;
   transition: background-color 0.15s, color 0.15s;
 }
 
@@ -219,16 +289,27 @@
   box-shadow: 0 0 0 2px var(--ring);
 }
 
+/* O FullCalendar não tem variável de texto para hover e ativo: usa
+   --fc-button-text-color, que some sobre o fundo primário. */
+.fc-wrapper .fc .fc-button-primary:hover {
+  color: var(--fc-button-hover-text-color);
+}
+
+.fc-wrapper .fc .fc-button-primary:not(:disabled).fc-button-active,
+.fc-wrapper .fc .fc-button-primary:not(:disabled):active {
+  color: var(--fc-button-active-text-color);
+}
+
 .fc-wrapper .fc-button-group .fc-button {
   border-radius: 0;
 }
 
 .fc-wrapper .fc-button-group .fc-button:first-child {
-  border-radius: calc(var(--radius) - 2px) 0 0 calc(var(--radius) - 2px);
+  border-radius: 9999px 0 0 9999px;
 }
 
 .fc-wrapper .fc-button-group .fc-button:last-child {
-  border-radius: 0 calc(var(--radius) - 2px) calc(var(--radius) - 2px) 0;
+  border-radius: 0 9999px 9999px 0;
 }
 
 .fc-wrapper .fc-col-header-cell {
@@ -247,15 +328,15 @@
 }
 
 .fc-wrapper .fc-daygrid-day.fc-day-today .fc-daygrid-day-number {
-  background-color: oklch(0.72 0.18 330);
-  color: oklch(0.98 0 0);
+  background-color: var(--foreground);
+  color: var(--background);
   border-radius: 9999px;
   min-width: 1.5rem;
   text-align: center;
 }
 
 .fc-wrapper .fc-event {
-  border-radius: calc(var(--radius) - 4px);
+  border-radius: 0.5rem;
   padding: 0 0.25rem;
   font-size: 0.75rem;
   cursor: pointer;
@@ -267,7 +348,7 @@
 }
 
 .fc-wrapper .fc-timegrid-now-indicator-line {
-  border-color: oklch(0.72 0.18 330);
+  border-color: var(--foreground);
 }
 
 .fc-wrapper .fc-timegrid-slot-label {

@@ -7,17 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
-function isoToDate(iso: string): Date | undefined {
-  if (!iso) return undefined;
+function formatIso(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);
-  return new Date(y, m - 1, d);
-}
-
-function dateToIso(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  return new Date(y, m - 1, d).toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
 }
 
 type DatePickerProps = {
@@ -36,11 +32,6 @@ export function DatePicker({
   calendarClassName,
 }: DatePickerProps) {
   const [open, setOpen] = React.useState(false);
-  const selected = isoToDate(value);
-
-  const label = selected
-    ? selected.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })
-    : placeholder;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -49,30 +40,22 @@ export function DatePicker({
           variant="outline"
           className={cn(
             "w-full justify-start text-left font-normal",
-            !selected && "text-muted-foreground",
+            !value && "text-muted-foreground",
             className
           )}
         >
           <CalendarIcon data-icon="inline-start" />
-          {label}
+          {value ? formatIso(value) : placeholder}
         </Button>
       </PopoverTrigger>
-      <PopoverContent
-        className="w-auto p-0 z-[200]"
-        align="start"
-        side="top"
-        sideOffset={8}
-      >
+      <PopoverContent className="w-auto p-0" align="start" side="top" sideOffset={8}>
         <Calendar
-          mode="single"
-          selected={selected}
-          onSelect={(date) => {
-            onChange(date ? dateToIso(date) : "");
+          value={value || null}
+          onValueChange={(next) => {
+            onChange(typeof next === "string" ? next : "");
             setOpen(false);
           }}
           className={cn("[--cell-size:2.75rem]", calendarClassName)}
-          captionLayout="dropdown"
-          autoFocus
         />
       </PopoverContent>
     </Popover>

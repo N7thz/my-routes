@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session";
+import { isAdminEmail } from "@/lib/admin";
 import { AppSidebar } from "@/components/app-sidebar";
 import { BottomNav } from "@/components/bottom-nav";
 import { Separator } from "@/components/ui/separator";
@@ -20,10 +21,10 @@ export default async function AppLayout({
 
   return (
     <SidebarProvider defaultOpen={defaultOpen}>
-      <AppSidebar user={user} />
+      <AppSidebar user={user} isAdmin={isAdminEmail(user.email)} />
       <main className="flex flex-1 min-w-0 flex-col overflow-hidden">
         <header
-          className="flex shrink-0 items-center gap-2 border-b bg-background/95 backdrop-blur-sm px-4"
+          className="flex shrink-0 items-center gap-2 border-b bg-background/50 backdrop-blur-md px-4"
           style={{
             height: "calc(3.5rem + env(safe-area-inset-top))",
             paddingTop: "env(safe-area-inset-top)",

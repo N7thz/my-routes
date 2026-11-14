@@ -1,17 +1,9 @@
 "use client";
 
 import { signIn } from "@/lib/auth-client";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { GridPattern } from "@/components/ui/grid-pattern";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 
 function NotionIcon() {
   return (
@@ -46,6 +38,55 @@ function GoogleIcon() {
 
 type Provider = "google" | "notion";
 
+// Atraso da animação de entrada: cada item entra 120ms depois do anterior.
+const ordem = (i: number) => ({ "--i": i }) as CSSProperties;
+
+// Paradas do desenho de rota à direita (coordenadas no viewBox 0 0 400 400).
+const PARADAS: Array<[number, number]> = [
+  [48, 318], [118, 232], [92, 128], [196, 84], [262, 176], [214, 286], [332, 252], [352, 112],
+];
+
+function BotaoCamadas({
+  primario,
+  children,
+  ...props
+}: {
+  primario?: boolean;
+  children: ReactNode;
+} & React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <span className="pill-layered w-full sm:w-auto">
+      <button
+        type="button"
+        className={cn(
+          "inline-flex h-11 w-full items-center justify-center gap-3 rounded-full px-7 text-sm font-semibold",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-black",
+          "disabled:cursor-not-allowed [&_svg]:size-5 [&_svg]:shrink-0",
+          primario ? "bg-white text-black" : "bg-black text-white",
+        )}
+        {...props}
+      >
+        {children}
+      </button>
+    </span>
+  );
+}
+
+function DesenhoRota() {
+  const linha = PARADAS.map(([x, y]) => `${x},${y}`).join(" ");
+  return (
+    <svg viewBox="0 0 400 400" className="w-full max-w-md" aria-hidden="true" fill="none">
+      <polyline points={linha} stroke="rgb(255 255 255 / 0.2)" strokeWidth="1" strokeDasharray="2 6" strokeLinecap="round" />
+      {PARADAS.map(([x, y], i) => (
+        <g key={`${x}-${y}`}>
+          <circle cx={x} cy={y} r="14" stroke="rgb(255 255 255 / 0.1)" />
+          <circle cx={x} cy={y} r="3.5" fill="#ffffff" className="hero-blink" style={ordem(i)} />
+        </g>
+      ))}
+    </svg>
+  );
+}
+
 export default function LoginPage() {
   const [loading, setLoading] = useState<Provider | null>(null);
 
@@ -56,47 +97,63 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-background">
-      <GridPattern
-        squares={[
-          [4, 4], [5, 1], [8, 2], [6, 6], [10, 5], [13, 3],
-          [15, 7], [2, 9], [9, 10], [12, 12], [7, 14], [16, 11],
-        ]}
-        className={cn(
-          "[mask-image:radial-gradient(600px_circle_at_center,white,transparent)]",
-          "stroke-border fill-muted/20",
-        )}
-      />
+    // O hero é só escuro (DESIGN.md): a classe "dark" fixa os tokens aqui, qualquer que seja o tema do app.
+    <div className="dark relative flex min-h-[100dvh] flex-1 items-center overflow-hidden bg-black text-white">
+      {/* Fundo em movimento no lugar do vídeo: manchas de luz + grade, sob overlay preto 50%. */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+        <div className="hero-drift absolute -left-[10%] top-[-20%] size-[60vmax] rounded-full bg-[radial-gradient(closest-side,rgb(255_255_255/0.22),transparent)]" />
+        <div
+          className="hero-drift absolute -right-[15%] bottom-[-30%] size-[55vmax] rounded-full bg-[radial-gradient(closest-side,rgb(255_255_255/0.16),transparent)]"
+          style={{ animationDelay: "-11s" }}
+        />
+        <GridPattern
+          className={cn(
+            "[mask-image:radial-gradient(900px_circle_at_70%_40%,white,transparent)]",
+            "fill-white/5 stroke-white/20",
+          )}
+        />
+        <div className="absolute inset-0 bg-black/50" />
+      </div>
 
-      <Card className="relative z-10 w-full max-w-sm backdrop-blur-sm">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Bem-vindo ao My Routes</CardTitle>
-          <CardDescription>Faça login para continuar</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          <Button
-            variant="outline"
-            size="lg"
-            className="w-full gap-3"
-            onClick={() => handleSignIn("google")}
-            disabled={loading !== null}
+      <div className="relative z-10 mx-auto grid w-full max-w-[1280px] items-center gap-12 px-6 py-16 md:grid-cols-[1.1fr_0.9fr]">
+        <div className="flex flex-col items-start">
+          <div
+            className="hero-enter inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-[0.8125rem] font-medium"
+            style={ordem(0)}
           >
-            <GoogleIcon />
-            {loading === "google" ? "Redirecionando..." : "Continuar com Google"}
-          </Button>
+            <span className="size-1 rounded-full bg-white" />
+            <span className="text-white/60">Rotas do dia</span>
+            <span className="text-white">My Routes</span>
+          </div>
 
-          <Button
-            variant="outline"
-            size="lg"
-            className="w-full gap-3"
-            onClick={() => handleSignIn("notion")}
-            disabled={loading !== null}
+          <h1
+            className="hero-enter text-gradient-hero mt-6 max-w-[14ch] pb-2 text-4xl font-bold leading-[1.1] tracking-tight md:text-[clamp(2.5rem,5vw,4rem)]"
+            style={ordem(1)}
           >
-            <NotionIcon />
-            {loading === "notion" ? "Redirecionando..." : "Continuar com Notion"}
-          </Button>
-        </CardContent>
-      </Card>
+            Suas visitas, na ordem certa.
+          </h1>
+
+          <p className="hero-enter mt-5 max-w-[46ch] text-base leading-[1.6] text-white/70" style={ordem(2)}>
+            Empresas, rotas e agenda no mesmo lugar. Entre com a sua conta para continuar.
+          </p>
+
+          <div className="hero-enter mt-9 flex w-full flex-col gap-3 sm:w-auto sm:flex-row" style={ordem(3)}>
+            <BotaoCamadas primario onClick={() => handleSignIn("google")} disabled={loading !== null}>
+              <GoogleIcon />
+              {loading === "google" ? "Redirecionando..." : "Continuar com Google"}
+            </BotaoCamadas>
+
+            <BotaoCamadas onClick={() => handleSignIn("notion")} disabled={loading !== null}>
+              <NotionIcon />
+              {loading === "notion" ? "Redirecionando..." : "Continuar com Notion"}
+            </BotaoCamadas>
+          </div>
+        </div>
+
+        <div className="hero-enter hidden justify-center md:flex" style={ordem(4)}>
+          <DesenhoRota />
+        </div>
+      </div>
     </div>
   );
 }

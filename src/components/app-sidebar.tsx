@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOutIcon, ChevronsUpDownIcon } from "lucide-react";
+import { LogOutIcon, ChevronsUpDownIcon, GaugeIcon } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -34,7 +34,7 @@ type User = {
   image?: string | null;
 };
 
-export function AppSidebar({ user }: { user?: User | null }) {
+export function AppSidebar({ user, isAdmin = false }: { user?: User | null; isAdmin?: boolean }) {
   const pathname = usePathname();
   const handleSignOut = useSignOut();
 
@@ -72,6 +72,23 @@ export function AppSidebar({ user }: { user?: User | null }) {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+        {isAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Admin</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={pathname === "/admin"} tooltip="Uso das ferramentas">
+                    <Link href="/admin">
+                      <GaugeIcon />
+                      <span>Uso das ferramentas</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
 
       <SidebarFooter>
@@ -82,6 +99,8 @@ export function AppSidebar({ user }: { user?: User | null }) {
                 <SidebarMenuButton
                   size="lg"
                   tooltip={user?.name ?? "Usuário"}
+                  // Com a sidebar recolhida o nome some: o rótulo garante o nome acessível.
+                  aria-label={`Conta de ${user?.name ?? "usuário"}`}
                   className="data-open:bg-sidebar-accent data-open:text-sidebar-accent-foreground"
                 >
                   <Avatar className="size-8 shrink-0">

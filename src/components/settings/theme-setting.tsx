@@ -23,6 +23,7 @@ export function ThemeSetting() {
       {OPTIONS.map(({ value, label, icon: Icon }) => {
         const active = mounted && theme === value;
         return (
+          // biome-ignore lint/a11y/useSemanticElements: segmentado visual; role radio + aria-checked dá a semântica sem input escondido
           <button
             key={value}
             type="button"
