@@ -1,0 +1,10 @@
+// Contador diário de chamadas às ferramentas com plano/cota (Geoapify,
+// MapTiler...). Alimenta a página /admin; uma linha por serviço por dia.
+model ApiUsage {
+  service String
+  day     DateTime @db.Date
+  count   Int      @default(0)
+
+  @@id([service, day])
+  @@map("api_usage")
+}

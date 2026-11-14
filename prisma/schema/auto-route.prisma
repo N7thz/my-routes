@@ -1,0 +1,21 @@
+// Preferências da geração automática de rotas (cron diário e botão "Gerar
+// agora"). Sem registro, o usuário fica de fora do cron — exceto o
+// CRON_USER_EMAIL, que já era atendido antes desta tabela existir.
+model AutoRouteSettings {
+  userId         String    @id @map("user_id")
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  enabled        Boolean   @default(true)
+  useCompanies   Boolean   @default(true) @map("use_companies")
+  useCalendar    Boolean   @default(true) @map("use_calendar")
+  optimizeOrder  Boolean   @default(true) @map("optimize_order")
+  // Ponto de saída e chegada do dia (casa/escritório) usado na otimização.
+  originAddress  String?   @map("origin_address")
+  originLat      Float?    @map("origin_lat")
+  originLng      Float?    @map("origin_lng")
+  lastRunAt      DateTime? @map("last_run_at")
+  lastRunOk      Boolean?  @map("last_run_ok")
+  lastRunSummary String?   @map("last_run_summary")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@map("auto_route_settings")
+}

@@ -1,0 +1,45 @@
+enum CompanyStatus {
+  PENDENTE
+  EM_ANDAMENTO
+  CONCLUIDO
+  REVISAO
+
+  @@map("company_status")
+}
+
+model Company {
+  id              String         @id @default(cuid())
+  name            String
+  cnpj            String?
+  address         String?
+  lat             Float?
+  lng             Float?
+  // Última tentativa de geocodificação sem resultado: tira da fila do cron
+  // até o endereço mudar (editar o endereço zera o campo).
+  geocodeFailedAt DateTime?      @map("geocode_failed_at")
+  date            DateTime?
+  status          CompanyStatus?
+  observations    String?
+  notionId        String?        @unique
+  groupId         String?        @map("group_id")
+  group           CompanyGroup?  @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  stops           Stop[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([groupId])
+  @@map("company")
+}
+
+// Agrupamento livre de empresas (ex.: por região, cliente, contrato).
+// Cada empresa pertence a no máximo um grupo.
+model CompanyGroup {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  color     String?
+  companies Company[]
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@map("company_group")
+}

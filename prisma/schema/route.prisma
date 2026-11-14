@@ -1,0 +1,43 @@
+enum RouteStatus {
+  RASCUNHO
+  EM_ANDAMENTO
+  CONCLUIDA
+
+  @@map("route_status")
+}
+
+model Route {
+  id        String      @id @default(cuid())
+  userId    String      @map("user_id")
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  date      DateTime?   @db.Date
+  status    RouteStatus @default(RASCUNHO)
+  stops     Stop[]
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+
+  @@map("route")
+}
+
+model Stop {
+  id              String    @id @default(cuid())
+  routeId         String    @map("route_id")
+  route           Route     @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  companyId       String?   @map("company_id")
+  company         Company?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  // Evento do Google Agenda que originou a parada. Permite ressincronizar sem
+  // duplicar e remover a parada quando o evento sai da agenda.
+  calendarEventId String?   @map("calendar_event_id")
+  label           String?
+  address         String
+  lat             Float?
+  lng             Float?
+  geocodeFailedAt DateTime? @map("geocode_failed_at")
+  order           Int       @default(0)
+  visitedAt       DateTime? @map("visited_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  @@unique([routeId, calendarEventId])
+  @@map("stop")
+}

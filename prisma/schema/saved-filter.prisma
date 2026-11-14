@@ -1,0 +1,15 @@
+// Combinação de filtros com nome que o usuário salva numa tela (ex.: Empresas)
+// para reaplicar depois, em qualquer aparelho. `query` é a query string dos
+// filtros, no formato do nuqs (ex.: "?status=PENDENTE&groupBy=true").
+model SavedFilter {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  screen    String
+  name      String
+  query     String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, screen, name])
+  @@map("saved_filter")
+}
