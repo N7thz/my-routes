@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { APIError } from "better-auth/api";
+import { mcp } from "better-auth/plugins";
 import { prisma } from "./prisma";
 
 /**
@@ -56,6 +57,20 @@ export const auth = betterAuth({
       },
     },
   },
+  plugins: [
+    // Servidor OAuth para clientes MCP (claude.ai web/mobile): registro dinâmico
+    // de cliente, /api/auth/mcp/authorize e /api/auth/mcp/token. Sem sessão, o
+    // authorize manda para o login e, depois do login, segue sozinho. A rota
+    // /api/auth força prompt=consent, então sempre passa pela tela de consentimento.
+    mcp({
+      loginPage: "/login",
+      oidcConfig: {
+        loginPage: "/login",
+        consentPage: "/oauth/consent",
+        requirePKCE: true,
+      },
+    }),
+  ],
   socialProviders: {
     google: {
       clientId: process.env.GOOGLE_CLIENT_ID!,

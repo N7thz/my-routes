@@ -1,15 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { CheckIcon, CopyIcon, KeyRoundIcon, Loader2Icon, PlusIcon, Trash2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  useApiTokens,
-  useCreateApiToken,
-  useRevokeApiToken,
-  type CreatedApiToken,
-} from "@/hooks/use-api-tokens";
+import { useApiTokens, useCreateApiToken, useRevokeApiToken, type CreatedApiToken } from "@/hooks/use-api-tokens";
 
 function lastUsed(value: string | null): string {
   if (!value) return "Nunca usado";
@@ -69,6 +64,27 @@ function NewToken({ created, onDone }: { created: CreatedApiToken; onDone: () =>
   );
 }
 
+const noop = () => () => {};
+
+/** Conector do claude.ai (web/celular): faz login por OAuth, sem colar token. */
+function ClaudeConnectorHint() {
+  // A origem só existe no navegador; no servidor o texto sai sem a URL completa.
+  const origin = useSyncExternalStore(noop, () => window.location.origin, () => "");
+  const url = `${origin}/api/mcp`;
+  return (
+    <div className="space-y-2 border-b p-4">
+      <p className="text-xs text-muted-foreground">
+        No claude.ai (web ou celular), não precisa de token: em Configurações → Conectores → Adicionar conector
+        personalizado, use a URL abaixo e entre com sua conta. O token pessoal é para o Claude Code e outros clientes.
+      </p>
+      <div className="flex items-center gap-2">
+        <code className="min-w-0 flex-1 truncate rounded-md border bg-background px-2 py-1.5 font-mono text-xs">{url}</code>
+        {origin && <CopyButton text={url} label="Copiar" />}
+      </div>
+    </div>
+  );
+}
+
 export function ApiTokens() {
   const tokens = useApiTokens();
   const create = useCreateApiToken();
@@ -90,6 +106,7 @@ export function ApiTokens() {
 
   return (
     <>
+      <ClaudeConnectorHint />
       {created && <NewToken created={created} onDone={() => setCreated(null)} />}
 
       {tokens.isPending && (

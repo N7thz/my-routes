@@ -12,7 +12,7 @@ Feito para uso pessoal (um técnico/fiscal, quase tudo no RJ). Detalhes de produ
 - **Rota automática**: um cron diário sincroniza a agenda e gera a rota do dia sozinho.
 - **Geocodificação**: Geoapify com Nominatim como reserva, respeitando limites; endereços não encontrados ficam marcados.
 - **Uso das APIs**: o consumo das APIs com cota é acompanhado no app; área de admin restrita por e-mail.
-- **Servidor MCP**: `/api/mcp` (Streamable HTTP) com tokens pessoais gerados no perfil, para agentes consultarem empresas e rotas.
+- **Servidor MCP**: `/api/mcp` (Streamable HTTP) para agentes consultarem e ajustarem empresas e rotas. Entra com token pessoal gerado no perfil (Claude Code) ou com login OAuth e tela de consentimento (conector do claude.ai, registro dinâmico de cliente).
 - **PWA** instalável, com a rota do dia disponível sem sinal (`/offline`).
 
 Regra do projeto: **só serviços gratuitos**, nada que exija billing.

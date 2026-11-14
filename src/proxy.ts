@@ -13,9 +13,15 @@ const LOGIN = "/login";
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // A cron da Vercel não tem sessão (a rota confere o CRON_SECRET sozinha) e o
-  // servidor MCP chega com token pessoal (a rota valida o bearer sozinha).
-  if (pathname.startsWith("/api/auth") || pathname.startsWith("/api/cron/") || pathname === "/api/mcp") {
+  // A cron da Vercel não tem sessão (a rota confere o CRON_SECRET sozinha), o
+  // servidor MCP chega com bearer (a rota valida sozinha) e a descoberta OAuth
+  // em /.well-known é pública.
+  if (
+    pathname.startsWith("/api/auth") ||
+    pathname.startsWith("/api/cron/") ||
+    pathname === "/api/mcp" ||
+    pathname.startsWith("/.well-known/")
+  ) {
     return NextResponse.next();
   }
 

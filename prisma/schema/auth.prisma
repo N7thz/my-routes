@@ -13,6 +13,9 @@ model User {
   savedFilters       SavedFilter[]
   ignoredEventTitles IgnoredEventTitle[]
   apiTokens          ApiToken[]
+  oauthApplications  OauthApplication[]
+  oauthAccessTokens  OauthAccessToken[]
+  oauthConsents      OauthConsent[]
 
   @@map("user")
 }
