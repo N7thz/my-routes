@@ -20,13 +20,13 @@ export function CalendarSkeleton() {
       </CardHeader>
       <CardContent className="flex-1">
         <div className="grid grid-cols-7 gap-px mb-2">
-          {Array.from({ length: 7 }).map((_, i) => (
-            <Skeleton key={i} className="h-6 rounded" />
+          {Array.from({ length: 7 }, (_, i) => `dia-${i}`).map((id) => (
+            <Skeleton key={id} className="h-6 rounded" />
           ))}
         </div>
         <div className="grid grid-cols-7 gap-px">
-          {Array.from({ length: 35 }).map((_, i) => (
-            <Skeleton key={i} className="h-24 rounded" />
+          {Array.from({ length: 35 }, (_, i) => `celula-${i}`).map((id) => (
+            <Skeleton key={id} className="h-24 rounded" />
           ))}
         </div>
       </CardContent>

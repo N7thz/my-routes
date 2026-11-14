@@ -3,7 +3,7 @@ import { GoogleCalendarView } from "@/components/google-calendar-view";
 
 export const metadata: Metadata = {
   title: "Agenda",
-  description: "Eventos do Google Agenda e tarefas do Runrunit.",
+  description: "Eventos do Google Agenda e empresas agendadas.",
 };
 
 export default function AgendaPage() {

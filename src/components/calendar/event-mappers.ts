@@ -1,5 +1,4 @@
 import { eventStart, type CalendarEvent } from "@/lib/google-calendar-service";
-import { taskColor, runrunitTaskUrl, taskCalendarDate, taskTimeRange, type RunrunitTask } from "@/lib/runrunit";
 import type { CompanyRecord } from "@/lib/company-service";
 
 export const COMPANY_COLOR = "#8b5cf6";
@@ -13,27 +12,6 @@ export function toGoogleFCEvent(event: CalendarEvent) {
     allDay: !event.start.dateTime,
     url: event.htmlLink,
     extendedProps: { source: "google" as const, location: event.location },
-  };
-}
-
-export function toRunrunitFCEvent(task: RunrunitTask) {
-  const range = taskTimeRange(task);
-  const start = range?.start ?? taskCalendarDate(task);
-  if (!start) return null;
-
-  const color = taskColor(task);
-
-  return {
-    id: `rr-${task.id}`,
-    title: task.is_subtask && task.parent_task_title ? `${task.parent_task_title} · ${task.title}` : task.title,
-    start,
-    ...(range && { end: range.end }),
-    allDay: !range,
-    url: runrunitTaskUrl(task.id),
-    backgroundColor: color,
-    borderColor: color,
-    classNames: task.is_closed ? ["rr-event-closed"] : [],
-    extendedProps: { source: "runrunit" as const, task },
   };
 }
 
